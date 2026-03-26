@@ -1,0 +1,29 @@
+{
+  "name": "prezzy",
+  "version": "0.1.0",
+  "description": "Make any CLI output beautiful. Zero config. Just pipe.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/viziums/prezzy"
+  },
+  "homepage": "https://github.com/viziums/prezzy",
+  "keywords": [
+    "cli",
+    "terminal",
+    "beautify",
+    "pretty",
+    "formatting",
+    "syntax-highlighting"
+  ],
+  "bin": {
+    "prezzy": "bin/prezzy"
+  },
+  "scripts": {
+    "postinstall": "node install.js"
+  },
+  "files": [
+    "bin/",
+    "install.js"
+  ]
+}
