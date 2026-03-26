@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod config;
 pub mod detect;
 pub mod input;
 pub mod render;
@@ -13,11 +14,9 @@ use terminal::TerminalContext;
 use theme::Theme;
 
 /// Core pipeline: read stdin -> detect format -> render beautifully -> write stdout.
-///
-/// This is the main entry point for pipe mode (`cmd | prezzy`).
 pub fn run(args: &Args) -> Result<()> {
     let terminal = TerminalContext::detect(args);
-    let theme = Theme::from_args(args);
+    let theme = Theme::by_name(&args.theme);
     let mut input = InputStream::new(args)?;
     let mut engine = RenderEngine::new(&terminal, &theme, args);
 
