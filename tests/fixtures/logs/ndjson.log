@@ -1,0 +1,5 @@
+{"level":"info","ts":"2024-01-15T10:30:45Z","msg":"server started","port":8080}
+{"level":"error","ts":"2024-01-15T10:30:46Z","msg":"connection refused","service":"db","retry":3}
+{"level":"warn","ts":"2024-01-15T10:30:47Z","msg":"slow query","duration_ms":2300,"query":"SELECT *"}
+{"level":"debug","ts":"2024-01-15T10:30:48Z","msg":"pool stats","active":3,"idle":7}
+{"level":"info","ts":"2024-01-15T10:30:49Z","msg":"request completed","method":"GET","path":"/api","status":200}

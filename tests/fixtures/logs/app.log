@@ -1,0 +1,5 @@
+2024-01-15T10:30:45.123Z ERROR [api] Failed to connect to database: connection refused
+2024-01-15T10:30:46.456Z INFO  [api] Retrying connection (attempt 3/5)
+2024-01-15T10:30:47.789Z WARN  [api] Slow query detected: 2.3s
+2024-01-15T10:30:48.012Z DEBUG [api] Connection pool stats: active=3 idle=7
+2024-01-15T10:30:49.345Z INFO  [api] Connected to primary replica

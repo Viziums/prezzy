@@ -115,3 +115,77 @@ fn force_plain_format() {
         // Should NOT be pretty-printed since we forced plain.
         .stdout(predicate::str::contains(r#"{"name":"prezzy"}"#));
 }
+
+// ─── NDJSON Detection ──────────────────────────────────────────
+
+#[test]
+fn detects_ndjson_and_extracts_fields() {
+    let input = r#"{"level":"info","ts":"2024-01-15T10:30:45Z","msg":"started","port":8080}
+{"level":"error","ts":"2024-01-15T10:30:46Z","msg":"failed","code":500}
+"#;
+    prezzy()
+        .arg("--color=never")
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("started"))
+        .stdout(predicate::str::contains("failed"));
+}
+
+#[test]
+fn ndjson_file_shows_structured_output() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/logs/ndjson.log")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("server started"))
+        .stdout(predicate::str::contains("connection refused"));
+}
+
+// ─── Log Detection ─────────────────────────────────────────────
+
+#[test]
+fn detects_log_lines() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/logs/app.log")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Failed to connect"))
+        .stdout(predicate::str::contains("Retrying connection"));
+}
+
+// ─── Level Filtering ───────────────────────────────────────────
+
+#[test]
+fn level_filter_on_ndjson() {
+    let input = r#"{"level":"debug","msg":"noisy"}
+{"level":"info","msg":"normal"}
+{"level":"error","msg":"critical"}
+"#;
+    prezzy()
+        .args(["--color=never", "--level=warn"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("critical"))
+        // debug and info should be filtered out
+        .stdout(predicate::str::contains("noisy").not())
+        .stdout(predicate::str::contains("normal").not());
+}
+
+#[test]
+fn level_filter_on_plain_logs() {
+    let input = "2024-01-15T10:30:45Z DEBUG pool stats\n\
+                 2024-01-15T10:30:46Z ERROR connection refused\n\
+                 2024-01-15T10:30:47Z INFO started\n";
+    prezzy()
+        .args(["--color=never", "--level=error"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("connection refused"))
+        .stdout(predicate::str::contains("pool stats").not())
+        .stdout(predicate::str::contains("started").not());
+}
