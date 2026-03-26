@@ -1,0 +1,12 @@
+---
+server:
+  host: localhost
+  port: 8080
+  debug: true
+database:
+  url: postgres://localhost/myapp
+  pool_size: 10
+  timeout: 30
+logging:
+  level: info
+  format: json

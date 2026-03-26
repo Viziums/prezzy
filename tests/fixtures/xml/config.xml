@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<config>
+  <server host="localhost" port="8080"/>
+  <database>
+    <url>postgres://localhost/myapp</url>
+    <pool-size>10</pool-size>
+  </database>
+  <!-- Logging configuration -->
+  <logging level="info" format="json"/>
+</config>

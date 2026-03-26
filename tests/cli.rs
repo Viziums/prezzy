@@ -262,3 +262,82 @@ fn detects_rust_panic() {
         .stdout(predicate::str::contains("panicked at"))
         .stdout(predicate::str::contains("prezzy::main"));
 }
+
+// ─── CSV Detection ─────────────────────────────────────────────
+
+#[test]
+fn detects_csv_and_renders_table() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/csv/data.csv")
+        .assert()
+        .success()
+        // Table should have borders and aligned content.
+        .stdout(predicate::str::contains("Alice"))
+        .stdout(predicate::str::contains("│"));
+}
+
+#[test]
+fn csv_from_stdin() {
+    let input = "a,b,c\n1,2,3\n4,5,6\n";
+    prezzy()
+        .arg("--color=never")
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("│"));
+}
+
+// ─── Key=Value Detection ───────────────────────────────────────
+
+#[test]
+fn detects_key_value() {
+    let input = "HOME=/home/user\nPATH=/usr/bin\nSHELL=/bin/bash\nTERM=xterm\n";
+    prezzy()
+        .arg("--color=never")
+        .write_stdin(input)
+        .assert()
+        .success()
+        // Should align the = signs.
+        .stdout(predicate::str::contains("HOME"))
+        .stdout(predicate::str::contains("="));
+}
+
+// ─── YAML Detection ────────────────────────────────────────────
+
+#[test]
+fn detects_yaml() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/yaml/config.yaml")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("server"))
+        .stdout(predicate::str::contains("localhost"));
+}
+
+// ─── XML Detection ─────────────────────────────────────────────
+
+#[test]
+fn detects_xml() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/xml/config.xml")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("<config>"))
+        .stdout(predicate::str::contains("</config>"));
+}
+
+// ─── Markdown Detection ────────────────────────────────────────
+
+#[test]
+fn detects_markdown() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/markdown/readme.md")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("# Prezzy"))
+        .stdout(predicate::str::contains("- Auto-detect format"));
+}
