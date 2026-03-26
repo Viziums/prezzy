@@ -1,0 +1,7 @@
+TypeError: Cannot read properties of undefined (reading 'map')
+    at processItems (/app/src/handler.js:42:15)
+    at Router.handle (/app/src/router.js:18:5)
+    at Layer.handle [as handle_request] (/app/node_modules/express/lib/router/layer.js:95:5)
+    at next (/app/node_modules/express/lib/router/route.js:144:13)
+    at Object.<anonymous> (/app/src/index.js:10:3)
+    at Module._compile (node:internal/modules/cjs/loader:1198:14)

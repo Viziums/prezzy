@@ -1,0 +1,9 @@
+thread 'main' panicked at 'index out of bounds: the len is 3 but the index is 5', src/main.rs:42:10
+stack backtrace:
+   0: std::panicking::begin_panic_handler
+   1: core::panicking::panic_fmt
+   2: core::panicking::panic_bounds_check
+   3: prezzy::detect::json::JsonDetector::detect
+   4: prezzy::detect::detect_format
+   5: prezzy::run
+   6: prezzy::main

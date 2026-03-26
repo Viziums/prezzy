@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/app/main.py", line 42, in handler
+    return process(data)
+  File "/app/process.py", line 15, in process
+    result = transform(data["key"])
+  File "/usr/lib/python3.11/json/decoder.py", line 355, in raw_decode
+    raise JSONDecodeError("Expecting value", s, err.value)
+json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)

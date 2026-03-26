@@ -189,3 +189,76 @@ fn level_filter_on_plain_logs() {
         .stdout(predicate::str::contains("pool stats").not())
         .stdout(predicate::str::contains("started").not());
 }
+
+// ─── Diff Detection ────────────────────────────────────────────
+
+#[test]
+fn detects_diff_output() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/diff/simple.patch")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("diff --git"))
+        .stdout(predicate::str::contains("+use std::fs;"))
+        .stdout(predicate::str::contains("-    println!(\"Hello, world!\");"));
+}
+
+#[test]
+fn diff_from_stdin() {
+    let input = "--- a/file.txt\n+++ b/file.txt\n@@ -1,2 +1,2 @@\n-old\n+new\n context\n";
+    prezzy()
+        .arg("--color=never")
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("-old"))
+        .stdout(predicate::str::contains("+new"));
+}
+
+#[test]
+fn force_diff_format() {
+    let input = "+added line\n-removed line\n context\n";
+    prezzy()
+        .args(["--color=never", "--format=diff"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("+added line"))
+        .stdout(predicate::str::contains("-removed line"));
+}
+
+// ─── Stack Trace Detection ─────────────────────────────────────
+
+#[test]
+fn detects_python_traceback() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/stacktrace/python.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Traceback"))
+        .stdout(predicate::str::contains("JSONDecodeError"));
+}
+
+#[test]
+fn detects_javascript_error() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/stacktrace/javascript.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("TypeError"))
+        .stdout(predicate::str::contains("processItems"));
+}
+
+#[test]
+fn detects_rust_panic() {
+    prezzy()
+        .arg("--color=never")
+        .arg("tests/fixtures/stacktrace/rust.txt")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("panicked at"))
+        .stdout(predicate::str::contains("prezzy::main"));
+}
