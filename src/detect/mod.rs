@@ -1,7 +1,11 @@
 mod json;
+mod log;
+mod ndjson;
 mod plain;
 
 pub use self::json::JsonDetector;
+pub use self::log::LogDetector;
+pub use self::ndjson::NdjsonDetector;
 pub use self::plain::PlainDetector;
 
 use crate::cli::FormatOverride;
@@ -62,18 +66,19 @@ const CONFIDENCE_THRESHOLD: f64 = 0.5;
 /// Run all registered detectors against the buffered lines and return the best match.
 ///
 /// If a `FormatOverride` is provided, skip detection entirely.
-#[must_use] 
+///
+/// Detector ordering matters: NDJSON runs before JSON because multi-line
+/// JSON-per-line should be detected as NDJSON, not single JSON.
+#[must_use]
 pub fn detect_format(lines: &[String], force: Option<FormatOverride>) -> Format {
     if let Some(forced) = force {
         return override_to_format(forced);
     }
 
     let detectors: Vec<Box<dyn Detector>> = vec![
+        Box::new(NdjsonDetector), // Must run before JSON
         Box::new(JsonDetector),
-        // Future detectors:
-        // Box::new(NdjsonDetector),
-        // Box::new(DiffDetector),
-        // Box::new(LogDetector),
+        Box::new(LogDetector),
     ];
 
     let mut best_format = Format::Plain;

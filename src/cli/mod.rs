@@ -41,6 +41,9 @@ pub struct Args {
     #[arg(short, long, env = "PREZZY_WIDTH")]
     pub width: Option<u16>,
 
+    /// Filter log output by minimum level (trace, debug, info, warn, error).
+    #[arg(short, long)]
+    pub level: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

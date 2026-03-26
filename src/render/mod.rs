@@ -1,4 +1,6 @@
-mod json;
+pub mod json;
+mod log;
+mod ndjson;
 mod plain;
 
 use std::io::{self, Write};
@@ -12,6 +14,8 @@ use crate::terminal::TerminalContext;
 use crate::theme::Theme;
 
 use self::json::JsonRenderer;
+use self::log::LogRenderer;
+use self::ndjson::NdjsonRenderer;
 use self::plain::PlainRenderer;
 
 /// Trait for format-specific renderers.
@@ -37,6 +41,42 @@ pub trait Renderer {
 pub struct RenderContext<'a> {
     pub terminal: &'a TerminalContext,
     pub theme: &'a Theme,
+    pub level_filter: Option<LevelFilter>,
+}
+
+/// Log level filtering.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum LevelFilter {
+    Trace,
+    Debug,
+    Info,
+    Warn,
+    Error,
+}
+
+impl LevelFilter {
+    /// Parse a level string into a filter. Returns None if unrecognized.
+    #[must_use] 
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.to_lowercase().as_str() {
+            "trace" | "trc" | "verbose" => Some(Self::Trace),
+            "debug" | "dbg" => Some(Self::Debug),
+            "info" => Some(Self::Info),
+            "warn" | "warning" => Some(Self::Warn),
+            "error" | "err" | "fatal" | "critical" | "crit" => Some(Self::Error),
+            _ => None,
+        }
+    }
+
+    /// Check if a log line's level passes this filter.
+    /// Returns true if the line's level is >= the filter level.
+    #[must_use] 
+    pub fn passes(self, line_level: &str) -> bool {
+        let Some(line) = Self::parse(line_level) else {
+            return true; // Unknown levels pass through.
+        };
+        line >= self
+    }
 }
 
 /// Orchestrates detection and rendering.
@@ -44,15 +84,18 @@ pub struct RenderEngine<'a> {
     terminal: &'a TerminalContext,
     theme: &'a Theme,
     format_override: Option<crate::cli::FormatOverride>,
+    level_filter: Option<LevelFilter>,
 }
 
 impl<'a> RenderEngine<'a> {
-    #[must_use] 
-    pub const fn new(terminal: &'a TerminalContext, theme: &'a Theme, args: &Args) -> Self {
+    #[must_use]
+    pub fn new(terminal: &'a TerminalContext, theme: &'a Theme, args: &Args) -> Self {
+        let level_filter = args.level.as_deref().and_then(LevelFilter::parse);
         Self {
             terminal,
             theme,
             format_override: args.format,
+            level_filter,
         }
     }
 
@@ -60,7 +103,6 @@ impl<'a> RenderEngine<'a> {
     pub fn process(&mut self, input: &mut InputStream) -> Result<()> {
         let mut stdout = io::BufWriter::new(io::stdout().lock());
 
-        // Buffer lines for detection.
         let peeked = input.peek(DETECTION_BUFFER_SIZE)?;
         let format = detect::detect_format(peeked, self.format_override);
 
@@ -68,6 +110,7 @@ impl<'a> RenderEngine<'a> {
         let ctx = RenderContext {
             terminal: self.terminal,
             theme: self.theme,
+            level_filter: self.level_filter,
         };
 
         if renderer.wants_full_input() {
@@ -94,8 +137,9 @@ impl<'a> RenderEngine<'a> {
     fn renderer_for(format: Format) -> Box<dyn Renderer> {
         match format {
             Format::Json => Box::new(JsonRenderer),
+            Format::Ndjson => Box::new(NdjsonRenderer),
+            Format::Log => Box::new(LogRenderer),
             _ => Box::new(PlainRenderer),
         }
     }
-
 }
