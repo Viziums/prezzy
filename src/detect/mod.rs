@@ -1,16 +1,26 @@
+mod csv;
 mod diff;
 mod json;
+mod kv;
 mod log;
+mod markdown;
 mod ndjson;
 mod plain;
 mod stacktrace;
+mod xml;
+mod yaml;
 
+pub use self::csv::{CsvDetector, TsvDetector};
 pub use self::diff::DiffDetector;
 pub use self::json::JsonDetector;
+pub use self::kv::KeyValueDetector;
 pub use self::log::LogDetector;
+pub use self::markdown::MarkdownDetector;
 pub use self::ndjson::NdjsonDetector;
 pub use self::plain::PlainDetector;
 pub use self::stacktrace::StackTraceDetector;
+pub use self::xml::XmlDetector;
+pub use self::yaml::YamlDetector;
 
 use crate::cli::FormatOverride;
 
@@ -67,12 +77,10 @@ pub const DETECTION_BUFFER_SIZE: usize = 32;
 /// Minimum confidence to accept a detection result.
 const CONFIDENCE_THRESHOLD: f64 = 0.5;
 
-/// Run all registered detectors against the buffered lines and return the best match.
+/// Run all registered detectors and return the highest-confidence match.
 ///
-/// If a `FormatOverride` is provided, skip detection entirely.
-///
-/// Detector ordering: higher-confidence formats are registered first so they
-/// win ties. NDJSON before JSON, diff and stack traces before generic logs.
+/// Detection order ensures specific formats (NDJSON, diff) beat
+/// generic ones (logs, plain text) when confidence is close.
 #[must_use]
 pub fn detect_format(lines: &[String], force: Option<FormatOverride>) -> Format {
     if let Some(forced) = force {
@@ -80,10 +88,19 @@ pub fn detect_format(lines: &[String], force: Option<FormatOverride>) -> Format 
     }
 
     let detectors: Vec<Box<dyn Detector>> = vec![
+        // Structured data with unambiguous markers (high confidence).
         Box::new(NdjsonDetector),
         Box::new(JsonDetector),
         Box::new(DiffDetector),
+        Box::new(XmlDetector),
         Box::new(StackTraceDetector),
+        // Delimited data.
+        Box::new(CsvDetector),
+        Box::new(TsvDetector),
+        // Pattern-based (moderate confidence, more prone to false positives).
+        Box::new(YamlDetector),
+        Box::new(KeyValueDetector),
+        Box::new(MarkdownDetector),
         Box::new(LogDetector),
     ];
 

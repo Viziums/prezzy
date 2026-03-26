@@ -1,9 +1,14 @@
+mod csv;
 mod diff;
 pub mod json;
+mod kv;
 mod log;
+mod markdown;
 mod ndjson;
 mod plain;
 mod stacktrace;
+mod xml;
+mod yaml;
 
 use std::io::{self, Write};
 
@@ -15,12 +20,17 @@ use crate::input::InputStream;
 use crate::terminal::TerminalContext;
 use crate::theme::Theme;
 
+use self::csv::CsvRenderer;
 use self::diff::DiffRenderer;
 use self::json::JsonRenderer;
+use self::kv::KeyValueRenderer;
 use self::log::LogRenderer;
+use self::markdown::MarkdownRenderer;
 use self::ndjson::NdjsonRenderer;
 use self::plain::PlainRenderer;
 use self::stacktrace::StackTraceRenderer;
+use self::xml::XmlRenderer;
+use self::yaml::YamlRenderer;
 
 /// Trait for format-specific renderers.
 pub trait Renderer {
@@ -59,8 +69,7 @@ pub enum LevelFilter {
 }
 
 impl LevelFilter {
-    /// Parse a level string into a filter. Returns None if unrecognized.
-    #[must_use] 
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         match s.to_lowercase().as_str() {
             "trace" | "trc" | "verbose" => Some(Self::Trace),
@@ -72,12 +81,10 @@ impl LevelFilter {
         }
     }
 
-    /// Check if a log line's level passes this filter.
-    /// Returns true if the line's level is >= the filter level.
-    #[must_use] 
+    #[must_use]
     pub fn passes(self, line_level: &str) -> bool {
         let Some(line) = Self::parse(line_level) else {
-            return true; // Unknown levels pass through.
+            return true;
         };
         line >= self
     }
@@ -145,6 +152,12 @@ impl<'a> RenderEngine<'a> {
             Format::Log => Box::new(LogRenderer),
             Format::Diff => Box::new(DiffRenderer),
             Format::StackTrace => Box::new(StackTraceRenderer),
+            Format::Csv => Box::new(CsvRenderer::comma()),
+            Format::Tsv => Box::new(CsvRenderer::tab()),
+            Format::KeyValue => Box::new(KeyValueRenderer),
+            Format::Yaml => Box::new(YamlRenderer),
+            Format::Xml => Box::new(XmlRenderer),
+            Format::Markdown => Box::new(MarkdownRenderer::new()),
             _ => Box::new(PlainRenderer),
         }
     }
