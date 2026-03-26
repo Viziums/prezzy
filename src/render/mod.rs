@@ -1,7 +1,9 @@
+mod diff;
 pub mod json;
 mod log;
 mod ndjson;
 mod plain;
+mod stacktrace;
 
 use std::io::{self, Write};
 
@@ -13,10 +15,12 @@ use crate::input::InputStream;
 use crate::terminal::TerminalContext;
 use crate::theme::Theme;
 
+use self::diff::DiffRenderer;
 use self::json::JsonRenderer;
 use self::log::LogRenderer;
 use self::ndjson::NdjsonRenderer;
 use self::plain::PlainRenderer;
+use self::stacktrace::StackTraceRenderer;
 
 /// Trait for format-specific renderers.
 pub trait Renderer {
@@ -139,6 +143,8 @@ impl<'a> RenderEngine<'a> {
             Format::Json => Box::new(JsonRenderer),
             Format::Ndjson => Box::new(NdjsonRenderer),
             Format::Log => Box::new(LogRenderer),
+            Format::Diff => Box::new(DiffRenderer),
+            Format::StackTrace => Box::new(StackTraceRenderer),
             _ => Box::new(PlainRenderer),
         }
     }

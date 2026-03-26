@@ -1,12 +1,16 @@
+mod diff;
 mod json;
 mod log;
 mod ndjson;
 mod plain;
+mod stacktrace;
 
+pub use self::diff::DiffDetector;
 pub use self::json::JsonDetector;
 pub use self::log::LogDetector;
 pub use self::ndjson::NdjsonDetector;
 pub use self::plain::PlainDetector;
+pub use self::stacktrace::StackTraceDetector;
 
 use crate::cli::FormatOverride;
 
@@ -67,8 +71,8 @@ const CONFIDENCE_THRESHOLD: f64 = 0.5;
 ///
 /// If a `FormatOverride` is provided, skip detection entirely.
 ///
-/// Detector ordering matters: NDJSON runs before JSON because multi-line
-/// JSON-per-line should be detected as NDJSON, not single JSON.
+/// Detector ordering: higher-confidence formats are registered first so they
+/// win ties. NDJSON before JSON, diff and stack traces before generic logs.
 #[must_use]
 pub fn detect_format(lines: &[String], force: Option<FormatOverride>) -> Format {
     if let Some(forced) = force {
@@ -76,8 +80,10 @@ pub fn detect_format(lines: &[String], force: Option<FormatOverride>) -> Format 
     }
 
     let detectors: Vec<Box<dyn Detector>> = vec![
-        Box::new(NdjsonDetector), // Must run before JSON
+        Box::new(NdjsonDetector),
         Box::new(JsonDetector),
+        Box::new(DiffDetector),
+        Box::new(StackTraceDetector),
         Box::new(LogDetector),
     ];
 
