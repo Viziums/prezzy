@@ -162,11 +162,7 @@ mod tests {
 
     #[test]
     fn rejects_inconsistent_columns() {
-        let lines = vec![
-            "a,b,c".into(),
-            "d,e".into(),
-            "f".into(),
-        ];
+        let lines = vec!["a,b,c".into(), "d,e".into(), "f".into()];
         assert!(CsvDetector.detect(&lines) < 0.5);
     }
 }

@@ -22,7 +22,7 @@ pub struct TerminalContext {
 
 impl TerminalContext {
     /// Probe the terminal and build a context from the environment + args.
-    #[must_use] 
+    #[must_use]
     pub fn detect(args: &Args) -> Self {
         let is_tty = crossterm::tty::IsTty::is_tty(&std::io::stdout());
         let color_depth = ColorDepth::detect();

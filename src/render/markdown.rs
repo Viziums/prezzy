@@ -46,7 +46,11 @@ impl Renderer for MarkdownRenderer {
 
         // Headings.
         if trimmed.starts_with('#') {
-            write!(writer, "{}", line.with(Color::Cyan).attribute(Attribute::Bold))?;
+            write!(
+                writer,
+                "{}",
+                line.with(Color::Cyan).attribute(Attribute::Bold)
+            )?;
             return Ok(());
         }
 

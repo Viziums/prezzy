@@ -42,7 +42,10 @@ impl Renderer for NdjsonRenderer {
         let colors = &ctx.theme.log;
 
         // Extract well-known fields.
-        let timestamp = extract_string(map, &["ts", "time", "timestamp", "@timestamp", "t", "datetime"]);
+        let timestamp = extract_string(
+            map,
+            &["ts", "time", "timestamp", "@timestamp", "t", "datetime"],
+        );
         let level = extract_string(map, &["level", "lvl", "severity", "log.level"]);
 
         // Apply level filter.
@@ -79,9 +82,20 @@ impl Renderer for NdjsonRenderer {
 
         // Remaining fields as key=value.
         let skip_keys: &[&str] = &[
-            "ts", "time", "timestamp", "@timestamp", "t", "datetime",
-            "level", "lvl", "severity", "log.level",
-            "msg", "message", "text", "body",
+            "ts",
+            "time",
+            "timestamp",
+            "@timestamp",
+            "t",
+            "datetime",
+            "level",
+            "lvl",
+            "severity",
+            "log.level",
+            "msg",
+            "message",
+            "text",
+            "body",
         ];
 
         let mut has_extra = false;

@@ -15,7 +15,7 @@ use std::io::{self, Write};
 use anyhow::Result;
 
 use crate::cli::Args;
-use crate::detect::{self, Format, DETECTION_BUFFER_SIZE};
+use crate::detect::{self, DETECTION_BUFFER_SIZE, Format};
 use crate::input::InputStream;
 use crate::terminal::TerminalContext;
 use crate::theme::Theme;

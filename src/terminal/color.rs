@@ -15,7 +15,7 @@ impl ColorDepth {
     /// Detect color depth from environment variables.
     ///
     /// Checks `COLORTERM`, then `TERM`, falling back to basic if a TTY.
-    #[must_use] 
+    #[must_use]
     pub fn detect() -> Self {
         // COLORTERM is the most reliable signal for true color.
         if let Ok(ct) = std::env::var("COLORTERM") {

@@ -16,24 +16,28 @@ static TIMESTAMP_RE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
         r"^([\[\s]*",
         r"(?:",
-            r"\d{4}[-/]\d{2}[-/]\d{2}",        // ISO date
-            r"[T\s]\d{2}:\d{2}:\d{2}",         // time
-            r"(?:[.,]\d+)?",                     // fractional seconds
-            r"(?:Z|[+-]\d{2}:?\d{2})?",         // timezone
+        r"\d{4}[-/]\d{2}[-/]\d{2}", // ISO date
+        r"[T\s]\d{2}:\d{2}:\d{2}",  // time
+        r"(?:[.,]\d+)?",            // fractional seconds
+        r"(?:Z|[+-]\d{2}:?\d{2})?", // timezone
         r"|",
-            r"[A-Z][a-z]{2}\s+\d{1,2}\s+",     // syslog month day
-            r"\d{2}:\d{2}:\d{2}",               // time
+        r"[A-Z][a-z]{2}\s+\d{1,2}\s+", // syslog month day
+        r"\d{2}:\d{2}:\d{2}",          // time
         r"|",
-            r"\d{2}:\d{2}:\d{2}",               // time only
-            r"(?:[.,]\d+)?",                     // fractional seconds
+        r"\d{2}:\d{2}:\d{2}", // time only
+        r"(?:[.,]\d+)?",      // fractional seconds
         r")",
         r"\]?\s*)",
-    )).unwrap()
+    ))
+    .unwrap()
 });
 
 /// Matches log level keyword.
 static LEVEL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(ERROR|ERR|FATAL|CRITICAL|CRIT|WARN(?:ING)?|INFO|DEBUG|DBG|TRACE|TRC|VERBOSE)\b").unwrap()
+    Regex::new(
+        r"(?i)\b(ERROR|ERR|FATAL|CRITICAL|CRIT|WARN(?:ING)?|INFO|DEBUG|DBG|TRACE|TRC|VERBOSE)\b",
+    )
+    .unwrap()
 });
 
 impl Renderer for LogRenderer {

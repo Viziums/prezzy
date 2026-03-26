@@ -83,11 +83,7 @@ mod tests {
 
     #[test]
     fn handles_mixed_with_empty_lines() {
-        let lines = vec![
-            r#"{"a":1}"#.into(),
-            String::new(),
-            r#"{"b":2}"#.into(),
-        ];
+        let lines = vec![r#"{"a":1}"#.into(), String::new(), r#"{"b":2}"#.into()];
         assert!(NdjsonDetector.detect(&lines) > 0.9);
     }
 }

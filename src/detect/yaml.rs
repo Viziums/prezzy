@@ -10,14 +10,10 @@ use super::{Detector, Format};
 pub struct YamlDetector;
 
 /// Matches `key: value` (with no `=` sign, which would suggest KV format).
-static KV_COLON: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*[\w][\w.\-]*\s*:\s").unwrap()
-});
+static KV_COLON: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*[\w][\w.\-]*\s*:\s").unwrap());
 
 /// Matches YAML list items `- item`.
-static LIST_ITEM: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s*-\s+\S").unwrap()
-});
+static LIST_ITEM: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s*-\s+\S").unwrap());
 
 impl Detector for YamlDetector {
     fn detect(&self, lines: &[String]) -> f64 {
@@ -110,11 +106,7 @@ mod tests {
 
     #[test]
     fn detects_yaml_with_doc_start() {
-        let lines = vec![
-            "---".into(),
-            "name: prezzy".into(),
-            "version: 0.1.0".into(),
-        ];
+        let lines = vec!["---".into(), "name: prezzy".into(), "version: 0.1.0".into()];
         assert!(YamlDetector.detect(&lines) > 0.8);
     }
 

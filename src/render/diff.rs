@@ -27,7 +27,11 @@ impl Renderer for DiffRenderer {
 
         match kind {
             DiffLine::Header => {
-                write!(writer, "{}", line.with(colors.header).attribute(Attribute::Bold))?;
+                write!(
+                    writer,
+                    "{}",
+                    line.with(colors.header).attribute(Attribute::Bold)
+                )?;
             }
             DiffLine::HunkHeader => {
                 write!(writer, "{}", line.with(colors.header))?;

@@ -110,7 +110,7 @@ impl Theme {
         Self {
             name: "monokai".into(),
             json: JsonColors {
-                key: Color::AnsiValue(81),   // light blue
+                key: Color::AnsiValue(81),     // light blue
                 string: Color::AnsiValue(186), // yellow-green
                 number: Color::AnsiValue(141), // purple
                 bool_val: Color::AnsiValue(141),
@@ -118,9 +118,9 @@ impl Theme {
                 bracket: Color::AnsiValue(252),
             },
             log: LogColors {
-                error: Color::AnsiValue(197),  // pink-red
-                warn: Color::AnsiValue(208),   // orange
-                info: Color::AnsiValue(148),   // green
+                error: Color::AnsiValue(197), // pink-red
+                warn: Color::AnsiValue(208),  // orange
+                info: Color::AnsiValue(148),  // green
                 debug: Color::AnsiValue(242),
                 trace: Color::AnsiValue(239),
                 timestamp: Color::AnsiValue(242),
@@ -144,7 +144,7 @@ impl Theme {
         Self {
             name: "dracula".into(),
             json: JsonColors {
-                key: Color::AnsiValue(117),  // cyan
+                key: Color::AnsiValue(117),    // cyan
                 string: Color::AnsiValue(228), // yellow
                 number: Color::AnsiValue(183), // purple
                 bool_val: Color::AnsiValue(183),
@@ -152,9 +152,9 @@ impl Theme {
                 bracket: Color::AnsiValue(255),
             },
             log: LogColors {
-                error: Color::AnsiValue(210),  // red
-                warn: Color::AnsiValue(228),   // yellow
-                info: Color::AnsiValue(84),    // green
+                error: Color::AnsiValue(210), // red
+                warn: Color::AnsiValue(228),  // yellow
+                info: Color::AnsiValue(84),   // green
                 debug: Color::AnsiValue(246),
                 trace: Color::AnsiValue(242),
                 timestamp: Color::AnsiValue(246),
@@ -178,9 +178,9 @@ impl Theme {
         Self {
             name: "solarized-dark".into(),
             json: JsonColors {
-                key: Color::AnsiValue(37),   // cyan
-                string: Color::AnsiValue(64),  // green
-                number: Color::AnsiValue(136), // yellow
+                key: Color::AnsiValue(37),       // cyan
+                string: Color::AnsiValue(64),    // green
+                number: Color::AnsiValue(136),   // yellow
                 bool_val: Color::AnsiValue(166), // orange
                 null: Color::AnsiValue(246),
                 bracket: Color::AnsiValue(252),
@@ -246,15 +246,15 @@ impl Theme {
         Self {
             name: "nord".into(),
             json: JsonColors {
-                key: Color::AnsiValue(110),  // frost blue
-                string: Color::AnsiValue(108), // green
-                number: Color::AnsiValue(179), // yellow
+                key: Color::AnsiValue(110),      // frost blue
+                string: Color::AnsiValue(108),   // green
+                number: Color::AnsiValue(179),   // yellow
                 bool_val: Color::AnsiValue(139), // purple
                 null: Color::AnsiValue(243),
                 bracket: Color::AnsiValue(252),
             },
             log: LogColors {
-                error: Color::AnsiValue(174),  // red
+                error: Color::AnsiValue(174), // red
                 warn: Color::AnsiValue(179),
                 info: Color::AnsiValue(108),
                 debug: Color::AnsiValue(243),
@@ -280,15 +280,15 @@ impl Theme {
         Self {
             name: "gruvbox".into(),
             json: JsonColors {
-                key: Color::AnsiValue(109),  // blue
-                string: Color::AnsiValue(142), // green
-                number: Color::AnsiValue(214), // yellow
+                key: Color::AnsiValue(109),      // blue
+                string: Color::AnsiValue(142),   // green
+                number: Color::AnsiValue(214),   // yellow
                 bool_val: Color::AnsiValue(175), // purple
                 null: Color::AnsiValue(245),
                 bracket: Color::AnsiValue(223),
             },
             log: LogColors {
-                error: Color::AnsiValue(167),  // red
+                error: Color::AnsiValue(167), // red
                 warn: Color::AnsiValue(214),
                 info: Color::AnsiValue(142),
                 debug: Color::AnsiValue(245),

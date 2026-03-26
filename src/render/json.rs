@@ -41,7 +41,11 @@ impl Renderer for JsonRenderer {
 }
 
 /// Highlight a single JSON line (used by both JSON and NDJSON renderers).
-pub fn write_highlighted_json(json: &str, writer: &mut dyn Write, colors: &super::super::theme::JsonColors) -> Result<()> {
+pub fn write_highlighted_json(
+    json: &str,
+    writer: &mut dyn Write,
+    colors: &super::super::theme::JsonColors,
+) -> Result<()> {
     let tokens = tokenize_json(json);
     for token in &tokens {
         let color = match token.kind {
@@ -96,9 +100,7 @@ fn tokenize_json(json: &str) -> Vec<Token<'_>> {
     // Stack: true = inside object, false = inside array.
     let mut ctx_stack: Vec<bool> = Vec::new();
 
-    let in_array = |stack: &[bool]| -> bool {
-        stack.last().copied() == Some(false)
-    };
+    let in_array = |stack: &[bool]| -> bool { stack.last().copied() == Some(false) };
 
     while i < len {
         let start = i;
@@ -107,7 +109,10 @@ fn tokenize_json(json: &str) -> Vec<Token<'_>> {
                 while i < len && matches!(bytes[i], b' ' | b'\t' | b'\n' | b'\r') {
                     i += 1;
                 }
-                tokens.push(Token { kind: TokenKind::Whitespace, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Whitespace,
+                    text: &json[start..i],
+                });
             }
             b'"' => {
                 i += 1;
@@ -123,63 +128,101 @@ fn tokenize_json(json: &str) -> Vec<Token<'_>> {
                 }
                 // A string is a value if: (a) we're after ':', or (b) we're in an array.
                 let is_value = after_colon || in_array(&ctx_stack);
-                let kind = if is_value { TokenKind::StringVal } else { TokenKind::Key };
-                tokens.push(Token { kind, text: &json[start..i] });
+                let kind = if is_value {
+                    TokenKind::StringVal
+                } else {
+                    TokenKind::Key
+                };
+                tokens.push(Token {
+                    kind,
+                    text: &json[start..i],
+                });
                 after_colon = false;
             }
             b':' => {
                 i += 1;
                 after_colon = true;
-                tokens.push(Token { kind: TokenKind::Punctuation, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Punctuation,
+                    text: &json[start..i],
+                });
             }
             b',' => {
                 i += 1;
                 after_colon = false;
-                tokens.push(Token { kind: TokenKind::Punctuation, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Punctuation,
+                    text: &json[start..i],
+                });
             }
             b'{' => {
                 i += 1;
                 ctx_stack.push(true); // object
                 after_colon = false;
-                tokens.push(Token { kind: TokenKind::Bracket, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Bracket,
+                    text: &json[start..i],
+                });
             }
             b'[' => {
                 i += 1;
                 ctx_stack.push(false); // array
                 after_colon = false;
-                tokens.push(Token { kind: TokenKind::Bracket, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Bracket,
+                    text: &json[start..i],
+                });
             }
             b'}' | b']' => {
                 i += 1;
                 ctx_stack.pop();
                 after_colon = false;
-                tokens.push(Token { kind: TokenKind::Bracket, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Bracket,
+                    text: &json[start..i],
+                });
             }
             b't' if json[i..].starts_with("true") => {
                 i += 4;
                 after_colon = false;
-                tokens.push(Token { kind: TokenKind::Bool, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Bool,
+                    text: &json[start..i],
+                });
             }
             b'f' if json[i..].starts_with("false") => {
                 i += 5;
                 after_colon = false;
-                tokens.push(Token { kind: TokenKind::Bool, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Bool,
+                    text: &json[start..i],
+                });
             }
             b'n' if json[i..].starts_with("null") => {
                 i += 4;
                 after_colon = false;
-                tokens.push(Token { kind: TokenKind::Null, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Null,
+                    text: &json[start..i],
+                });
             }
             b'0'..=b'9' | b'-' => {
-                while i < len && matches!(bytes[i], b'0'..=b'9' | b'.' | b'-' | b'+' | b'e' | b'E') {
+                while i < len && matches!(bytes[i], b'0'..=b'9' | b'.' | b'-' | b'+' | b'e' | b'E')
+                {
                     i += 1;
                 }
                 after_colon = false;
-                tokens.push(Token { kind: TokenKind::Number, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Number,
+                    text: &json[start..i],
+                });
             }
             _ => {
                 i += 1;
-                tokens.push(Token { kind: TokenKind::Punctuation, text: &json[start..i] });
+                tokens.push(Token {
+                    kind: TokenKind::Punctuation,
+                    text: &json[start..i],
+                });
             }
         }
     }
@@ -196,21 +239,35 @@ mod tests {
         let json = r#"{"name": "prezzy", "count": 42, "ok": true, "x": null}"#;
         let tokens = tokenize_json(json);
 
-        let keys: Vec<&str> = tokens.iter()
+        let keys: Vec<&str> = tokens
+            .iter()
             .filter(|t| t.kind == TokenKind::Key)
             .map(|t| t.text)
             .collect();
         assert_eq!(keys, vec![r#""name""#, r#""count""#, r#""ok""#, r#""x""#]);
 
-        let strings: Vec<&str> = tokens.iter()
+        let strings: Vec<&str> = tokens
+            .iter()
             .filter(|t| t.kind == TokenKind::StringVal)
             .map(|t| t.text)
             .collect();
         assert_eq!(strings, vec![r#""prezzy""#]);
 
-        assert!(tokens.iter().any(|t| t.kind == TokenKind::Number && t.text == "42"));
-        assert!(tokens.iter().any(|t| t.kind == TokenKind::Bool && t.text == "true"));
-        assert!(tokens.iter().any(|t| t.kind == TokenKind::Null && t.text == "null"));
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Number && t.text == "42")
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Bool && t.text == "true")
+        );
+        assert!(
+            tokens
+                .iter()
+                .any(|t| t.kind == TokenKind::Null && t.text == "null")
+        );
     }
 
     #[test]
@@ -219,7 +276,8 @@ mod tests {
         let tokens = tokenize_json(json);
 
         // In arrays, strings are values not keys
-        let strings: Vec<&str> = tokens.iter()
+        let strings: Vec<&str> = tokens
+            .iter()
             .filter(|t| t.kind == TokenKind::StringVal)
             .map(|t| t.text)
             .collect();

@@ -10,14 +10,12 @@ pub struct KeyValueDetector;
 
 /// Matches `KEY=VALUE` with optional spaces around `=`.
 /// Key must start with a letter or underscore, can contain alphanumeric, `_`, `.`, `-`.
-static KV_LINE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[A-Za-z_][\w.\-]*\s*=\s*\S").unwrap()
-});
+static KV_LINE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Za-z_][\w.\-]*\s*=\s*\S").unwrap());
 
 /// Lines that are just a key with empty value: `KEY=`
-static KV_EMPTY: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^[A-Za-z_][\w.\-]*\s*=$").unwrap()
-});
+static KV_EMPTY: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Za-z_][\w.\-]*\s*=$").unwrap());
 
 impl Detector for KeyValueDetector {
     fn detect(&self, lines: &[String]) -> f64 {

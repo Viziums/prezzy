@@ -17,54 +17,39 @@ pub struct StackTraceDetector;
 
 // ─── Language-specific patterns ─────────────────────────────────
 
-static PYTHON_TRACEBACK: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^Traceback \(most recent call last\):").unwrap()
-});
+static PYTHON_TRACEBACK: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^Traceback \(most recent call last\):").unwrap());
 
-static PYTHON_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"^\s+File ".+", line \d+"#).unwrap()
-});
+static PYTHON_FRAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^\s+File ".+", line \d+"#).unwrap());
 
-static JS_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s+at\s+.+\(.+:\d+:\d+\)").unwrap()
-});
+static JS_FRAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s+at\s+.+\(.+:\d+:\d+\)").unwrap());
 
-static JS_FRAME_ANON: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s+at\s+.+:\d+:\d+").unwrap()
-});
+static JS_FRAME_ANON: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s+at\s+.+:\d+:\d+").unwrap());
 
-static JAVA_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s+at\s+[\w$.]+\([\w.]+:\d+\)").unwrap()
-});
+static JAVA_FRAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s+at\s+[\w$.]+\([\w.]+:\d+\)").unwrap());
 
-static RUST_PANIC: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^thread '.*' panicked at").unwrap()
-});
+static RUST_PANIC: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^thread '.*' panicked at").unwrap());
 
-static RUST_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s+\d+:\s+\S+").unwrap()
-});
+static RUST_FRAME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\s+\d+:\s+\S+").unwrap());
 
-static GO_GOROUTINE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^goroutine \d+ \[").unwrap()
-});
+static GO_GOROUTINE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^goroutine \d+ \[").unwrap());
 
-static GO_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\S+\.\S+\(").unwrap()
-});
+static GO_FRAME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\S+\.\S+\(").unwrap());
 
-static DOTNET_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s+at\s+[\w.]+\(.*\)\s+in\s+").unwrap()
-});
+static DOTNET_FRAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s+at\s+[\w.]+\(.*\)\s+in\s+").unwrap());
 
-static RUBY_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s+from\s+.+:\d+:in\s+").unwrap()
-});
+static RUBY_FRAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s+from\s+.+:\d+:in\s+").unwrap());
 
 /// Matches generic exception/error opening lines.
-static ERROR_LINE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^(\w+\.)*\w*(Error|Exception|Panic|FATAL|panic)\b").unwrap()
-});
+static ERROR_LINE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^(\w+\.)*\w*(Error|Exception|Panic|FATAL|panic)\b").unwrap());
 
 impl Detector for StackTraceDetector {
     fn detect(&self, lines: &[String]) -> f64 {

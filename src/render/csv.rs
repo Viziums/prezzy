@@ -49,17 +49,28 @@ impl Renderer for CsvRenderer {
         }
 
         // Cap column widths to terminal width / num_cols (sensible max).
-        let max_col = (ctx.terminal.width as usize).saturating_sub(num_cols * 3 + 1) / num_cols.max(1);
+        let max_col =
+            (ctx.terminal.width as usize).saturating_sub(num_cols * 3 + 1) / num_cols.max(1);
         for w in &mut col_widths {
             *w = (*w).min(max_col).max(1);
         }
 
         let colored = ctx.terminal.color_enabled;
         let border_color = Color::DarkGrey;
-        let b = if ctx.ascii { &ASCII_BORDERS } else { &UNICODE_BORDERS };
+        let b = if ctx.ascii {
+            &ASCII_BORDERS
+        } else {
+            &UNICODE_BORDERS
+        };
 
         // Top border.
-        write_border(writer, &col_widths, [b.top_left, b.top_mid, b.top_right, b.horiz], colored, border_color)?;
+        write_border(
+            writer,
+            &col_widths,
+            [b.top_left, b.top_mid, b.top_right, b.horiz],
+            colored,
+            border_color,
+        )?;
         writeln!(writer)?;
 
         for (row_idx, row) in rows.iter().enumerate() {
@@ -77,7 +88,14 @@ impl Renderer for CsvRenderer {
 
                 write!(writer, " ")?;
                 if colored && row_idx == 0 {
-                    write!(writer, "{}", truncated.as_str().with(Color::Cyan).attribute(Attribute::Bold))?;
+                    write!(
+                        writer,
+                        "{}",
+                        truncated
+                            .as_str()
+                            .with(Color::Cyan)
+                            .attribute(Attribute::Bold)
+                    )?;
                 } else {
                     write!(writer, "{truncated}")?;
                 }
@@ -92,36 +110,69 @@ impl Renderer for CsvRenderer {
             writeln!(writer)?;
 
             if row_idx == 0 {
-                write_border(writer, &col_widths, [b.mid_left, b.mid_mid, b.mid_right, b.horiz], colored, border_color)?;
+                write_border(
+                    writer,
+                    &col_widths,
+                    [b.mid_left, b.mid_mid, b.mid_right, b.horiz],
+                    colored,
+                    border_color,
+                )?;
                 writeln!(writer)?;
             }
         }
 
-        write_border(writer, &col_widths, [b.bot_left, b.bot_mid, b.bot_right, b.horiz], colored, border_color)?;
+        write_border(
+            writer,
+            &col_widths,
+            [b.bot_left, b.bot_mid, b.bot_right, b.horiz],
+            colored,
+            border_color,
+        )?;
 
         Ok(())
     }
 }
 
 struct BorderChars {
-    top_left: char, top_mid: char, top_right: char,
-    mid_left: char, mid_mid: char, mid_right: char,
-    bot_left: char, bot_mid: char, bot_right: char,
-    horiz: char, vert: char,
+    top_left: char,
+    top_mid: char,
+    top_right: char,
+    mid_left: char,
+    mid_mid: char,
+    mid_right: char,
+    bot_left: char,
+    bot_mid: char,
+    bot_right: char,
+    horiz: char,
+    vert: char,
 }
 
 const UNICODE_BORDERS: BorderChars = BorderChars {
-    top_left: '┌', top_mid: '┬', top_right: '┐',
-    mid_left: '├', mid_mid: '┼', mid_right: '┤',
-    bot_left: '└', bot_mid: '┴', bot_right: '┘',
-    horiz: '─', vert: '│',
+    top_left: '┌',
+    top_mid: '┬',
+    top_right: '┐',
+    mid_left: '├',
+    mid_mid: '┼',
+    mid_right: '┤',
+    bot_left: '└',
+    bot_mid: '┴',
+    bot_right: '┘',
+    horiz: '─',
+    vert: '│',
 };
 
 const ASCII_BORDERS: BorderChars = BorderChars {
-    top_left: '+', top_mid: '+', top_right: '+',
-    mid_left: '+', mid_mid: '+', mid_right: '+',
-    bot_left: '+', bot_mid: '+', bot_right: '+',
-    horiz: '-', vert: '|',
+    top_left: '+',
+    top_mid: '+',
+    top_right: '+',
+    mid_left: '+',
+    mid_mid: '+',
+    mid_right: '+',
+    bot_left: '+',
+    bot_mid: '+',
+    bot_right: '+',
+    horiz: '-',
+    vert: '|',
 };
 
 /// `chars`: [left, mid, right, horiz]

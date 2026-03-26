@@ -21,7 +21,11 @@ impl Renderer for StackTraceRenderer {
         let kind = classify_line(line);
         match kind {
             LineKind::ErrorMessage => {
-                write!(writer, "{}", line.with(Color::Red).attribute(Attribute::Bold))?;
+                write!(
+                    writer,
+                    "{}",
+                    line.with(Color::Red).attribute(Attribute::Bold)
+                )?;
             }
             LineKind::UserFrame => {
                 write_frame_highlighted(line, writer, Color::White)?;
@@ -66,51 +70,41 @@ enum LineKind {
 
 // ─── Patterns ───────────────────────────────────────────────────
 
-static ERROR_MSG: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)^(\w+\.)*\w*(Error|Exception|Panic)\b").unwrap()
-});
+static ERROR_MSG: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"(?i)^(\w+\.)*\w*(Error|Exception|Panic)\b").unwrap());
 
 static HEADER: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(concat!(
         r"(?i)^(?:",
-            r"Traceback \(most recent call last\):",
-            r"|thread '.*' panicked at",
-            r"|goroutine \d+ \[",
-            r"|stack backtrace:",
-            r"|Caused by:",
+        r"Traceback \(most recent call last\):",
+        r"|thread '.*' panicked at",
+        r"|goroutine \d+ \[",
+        r"|stack backtrace:",
+        r"|Caused by:",
         r")"
-    )).unwrap()
+    ))
+    .unwrap()
 });
 
 /// Python frame: `  File "/app/main.py", line 42, in handler`
-static PY_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"^(\s+File ")(.+)(", line )(\d+)(.*)"#).unwrap()
-});
+static PY_FRAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#"^(\s+File ")(.+)(", line )(\d+)(.*)"#).unwrap());
 
 /// JS/Java/C# frame: `    at something(location)`
-static AT_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(\s+at\s+)(.+)$").unwrap()
-});
+static AT_FRAME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\s+at\s+)(.+)$").unwrap());
 
 /// Rust frame: `   N: module::function`
-static RUST_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(\s+\d+:\s+)(.+)$").unwrap()
-});
+static RUST_FRAME: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\s+\d+:\s+)(.+)$").unwrap());
 
 /// Go file path line (tab-indented path after function).
-static GO_FILE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\t.+\.\w+:\d+").unwrap()
-});
+static GO_FILE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^\t.+\.\w+:\d+").unwrap());
 
 /// Python inline source code.
-static PY_CODE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^    \S").unwrap()
-});
+static PY_CODE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^    \S").unwrap());
 
 /// Ruby frame: `from /path:N:in 'method'`.
-static RUBY_FRAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^\s+from\s+.+:\d+:in\s+").unwrap()
-});
+static RUBY_FRAME: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^\s+from\s+.+:\d+:in\s+").unwrap());
 
 /// Heuristic: paths containing these are likely library code.
 const LIBRARY_INDICATORS: &[&str] = &[
@@ -202,7 +196,9 @@ fn classify_line(line: &str) -> LineKind {
 
 fn is_library_path(line: &str) -> bool {
     let lower = line.to_lowercase();
-    LIBRARY_INDICATORS.iter().any(|ind| lower.contains(&ind.to_lowercase()))
+    LIBRARY_INDICATORS
+        .iter()
+        .any(|ind| lower.contains(&ind.to_lowercase()))
 }
 
 /// Highlight a frame line: dim the leading whitespace and `at `
@@ -212,14 +208,24 @@ fn write_frame_highlighted(line: &str, writer: &mut dyn Write, color: Color) -> 
     if let Some(caps) = AT_FRAME.captures(line) {
         let prefix = caps.get(1).map_or("", |m| m.as_str());
         let body = caps.get(2).map_or("", |m| m.as_str());
-        write!(writer, "{}{}", prefix.with(Color::DarkGrey), body.with(color))?;
+        write!(
+            writer,
+            "{}{}",
+            prefix.with(Color::DarkGrey),
+            body.with(color)
+        )?;
         return Ok(());
     }
 
     if let Some(caps) = RUST_FRAME.captures(line) {
         let prefix = caps.get(1).map_or("", |m| m.as_str());
         let body = caps.get(2).map_or("", |m| m.as_str());
-        write!(writer, "{}{}", prefix.with(Color::DarkGrey), body.with(color))?;
+        write!(
+            writer,
+            "{}{}",
+            prefix.with(Color::DarkGrey),
+            body.with(color)
+        )?;
         return Ok(());
     }
 
@@ -297,7 +303,9 @@ mod tests {
             LineKind::UserFrame,
         );
         assert_eq!(
-            classify_line("    at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1067)"),
+            classify_line(
+                "    at org.springframework.web.servlet.DispatcherServlet.doDispatch(DispatcherServlet.java:1067)"
+            ),
             LineKind::LibraryFrame,
         );
     }
@@ -308,10 +316,7 @@ mod tests {
             classify_line("thread 'main' panicked at 'oops', src/main.rs:42:10"),
             LineKind::Header,
         );
-        assert_eq!(
-            classify_line("   3: prezzy::main"),
-            LineKind::UserFrame,
-        );
+        assert_eq!(classify_line("   3: prezzy::main"), LineKind::UserFrame,);
         assert_eq!(
             classify_line("   0: std::panicking::begin_panic_handler"),
             LineKind::LibraryFrame,

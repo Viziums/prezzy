@@ -22,8 +22,8 @@ impl InputStream {
     pub fn new(args: &Args) -> Result<Self> {
         let reader: Box<dyn Read> = match &args.file {
             Some(path) => {
-                let file = File::open(path)
-                    .with_context(|| format!("cannot open {}", path.display()))?;
+                let file =
+                    File::open(path).with_context(|| format!("cannot open {}", path.display()))?;
                 Box::new(file)
             }
             None => Box::new(io::stdin()),

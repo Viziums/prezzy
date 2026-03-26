@@ -13,13 +13,10 @@ use super::{RenderContext, Renderer};
 /// booleans magenta, comments dim.
 pub struct YamlRenderer;
 
-static KEY_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(\s*)([\w][\w.\-/]*)\s*(:)\s*(.*)$").unwrap()
-});
+static KEY_PATTERN: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^(\s*)([\w][\w.\-/]*)\s*(:)\s*(.*)$").unwrap());
 
-static COMMENT_PATTERN: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"^(\s*)(#.*)$").unwrap()
-});
+static COMMENT_PATTERN: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(\s*)(#.*)$").unwrap());
 
 impl Renderer for YamlRenderer {
     fn render_line(&self, line: &str, writer: &mut dyn Write, ctx: &RenderContext) -> Result<()> {
@@ -49,7 +46,12 @@ impl Renderer for YamlRenderer {
             let colon = caps.get(3).map_or("", |m| m.as_str());
             let value = caps.get(4).map_or("", |m| m.as_str());
 
-            write!(writer, "{indent}{}{} ", key.with(Color::Cyan), colon.with(Color::DarkGrey))?;
+            write!(
+                writer,
+                "{indent}{}{} ",
+                key.with(Color::Cyan),
+                colon.with(Color::DarkGrey)
+            )?;
             write_yaml_value(value, writer)?;
             return Ok(());
         }
@@ -77,7 +79,10 @@ fn write_yaml_value(value: &str, writer: &mut dyn Write) -> Result<()> {
     }
 
     // Booleans.
-    if matches!(trimmed, "true" | "false" | "yes" | "no" | "on" | "off" | "True" | "False" | "Yes" | "No") {
+    if matches!(
+        trimmed,
+        "true" | "false" | "yes" | "no" | "on" | "off" | "True" | "False" | "Yes" | "No"
+    ) {
         write!(writer, "{}", trimmed.with(Color::Magenta))?;
         return Ok(());
     }

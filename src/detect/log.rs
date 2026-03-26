@@ -29,13 +29,17 @@ static TIMESTAMP_RE: LazyLock<Regex> = LazyLock::new(|| {
             \d{2}:\d{2}:\d{2}             # Time: 10:30:45
             |
             \d{2}:\d{2}:\d{2}             # Time only: 10:30:45
-        )"
-    ).unwrap()
+        )",
+    )
+    .unwrap()
 });
 
 /// Matches log level keywords (case insensitive).
 static LEVEL_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\b(ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE|FATAL|CRITICAL|CRIT|ERR|DBG|TRC|VERBOSE)\b").unwrap()
+    Regex::new(
+        r"(?i)\b(ERROR|WARN(?:ING)?|INFO|DEBUG|TRACE|FATAL|CRITICAL|CRIT|ERR|DBG|TRC|VERBOSE)\b",
+    )
+    .unwrap()
 });
 
 impl Detector for LogDetector {
@@ -141,9 +145,7 @@ mod tests {
 
     #[test]
     fn rejects_json() {
-        let lines = vec![
-            r#"{"name": "prezzy"}"#.into(),
-        ];
+        let lines = vec![r#"{"name": "prezzy"}"#.into()];
         assert!(LogDetector.detect(&lines) < 0.1);
     }
 }

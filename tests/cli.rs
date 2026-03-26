@@ -201,7 +201,9 @@ fn detects_diff_output() {
         .success()
         .stdout(predicate::str::contains("diff --git"))
         .stdout(predicate::str::contains("+use std::fs;"))
-        .stdout(predicate::str::contains("-    println!(\"Hello, world!\");"));
+        .stdout(predicate::str::contains(
+            "-    println!(\"Hello, world!\");",
+        ));
 }
 
 #[test]
