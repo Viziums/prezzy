@@ -91,6 +91,7 @@ struct Token<'a> {
 ///
 /// Tracks an object/array context stack to correctly distinguish
 /// keys (in objects) from string values (in arrays or after colons).
+#[allow(clippy::too_many_lines)]
 fn tokenize_json(json: &str) -> Vec<Token<'_>> {
     let mut tokens = Vec::new();
     let bytes = json.as_bytes();
