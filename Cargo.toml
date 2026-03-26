@@ -21,23 +21,28 @@ name = "prezzy"
 path = "src/lib.rs"
 
 [dependencies]
-# CLI argument parsing
+# CLI
 clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+clap_complete = "4"
 
-# Terminal handling
+# Terminal
 crossterm = "0.28"
 
-# JSON
+# Serialization
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+toml = "0.8"
 
-# Log pattern matching
+# Pattern matching
 regex = "1"
 
 # Error handling
 anyhow = "1"
 
-# Unicode width (CJK, emoji)
+# Platform paths
+dirs = "6"
+
+# Unicode
 unicode-width = "0.2"
 
 [dev-dependencies]
@@ -63,7 +68,6 @@ unsafe_code = "forbid"
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
-# Allow these common patterns
 module_name_repetitions = "allow"
 missing_errors_doc = "allow"
 missing_panics_doc = "allow"
