@@ -341,3 +341,72 @@ fn detects_markdown() {
         .stdout(predicate::str::contains("# Prezzy"))
         .stdout(predicate::str::contains("- Auto-detect format"));
 }
+
+// ─── Themes ────────────────────────────────────────────────────
+
+#[test]
+fn list_themes() {
+    prezzy()
+        .arg("--list-themes")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("default"))
+        .stdout(predicate::str::contains("monokai"))
+        .stdout(predicate::str::contains("dracula"))
+        .stdout(predicate::str::contains("nord"))
+        .stdout(predicate::str::contains("gruvbox"));
+}
+
+#[test]
+fn theme_flag_accepted() {
+    prezzy()
+        .args(["--theme=dracula", "--color=never"])
+        .write_stdin(r#"{"x":1}"#)
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"x\""));
+}
+
+// ─── ASCII Mode ────────────────────────────────────────────────
+
+#[test]
+fn ascii_tables() {
+    let input = "a,b,c\n1,2,3\n";
+    prezzy()
+        .args(["--color=never", "--ascii"])
+        .write_stdin(input)
+        .assert()
+        .success()
+        // ASCII borders use + and - instead of box-drawing.
+        .stdout(predicate::str::contains("+"))
+        .stdout(predicate::str::contains("|"));
+}
+
+// ─── Shell Completions ─────────────────────────────────────────
+
+#[test]
+fn generates_bash_completions() {
+    prezzy()
+        .arg("--completions=bash")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("prezzy"));
+}
+
+#[test]
+fn generates_zsh_completions() {
+    prezzy()
+        .arg("--completions=zsh")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("prezzy"));
+}
+
+#[test]
+fn generates_fish_completions() {
+    prezzy()
+        .arg("--completions=fish")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("prezzy"));
+}
