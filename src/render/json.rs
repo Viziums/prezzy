@@ -1,7 +1,7 @@
 use std::io::Write;
 
 use anyhow::Result;
-use crossterm::style::{self, Stylize};
+use crossterm::style::{Color, Stylize};
 
 use super::{RenderContext, Renderer};
 
@@ -21,9 +21,9 @@ impl Renderer for JsonRenderer {
     fn render_all(&self, input: &str, writer: &mut dyn Write, ctx: &RenderContext) -> Result<()> {
         let trimmed = input.trim();
 
-        // Try to parse and re-serialize with indentation.
-        let value: serde_json::Value = if let Ok(v) = serde_json::from_str(trimmed) { v } else {
-            // Not valid JSON -- fall through to plain output.
+        let value: serde_json::Value = if let Ok(v) = serde_json::from_str(trimmed) {
+            v
+        } else {
             write!(writer, "{input}")?;
             return Ok(());
         };
@@ -31,9 +31,8 @@ impl Renderer for JsonRenderer {
         let pretty = serde_json::to_string_pretty(&value)?;
 
         if ctx.terminal.color_enabled {
-            highlight_json(&pretty, writer, ctx)?;
+            write_highlighted_json(&pretty, writer, &ctx.theme.json)?;
         } else {
-            // No color: still pretty-print (indentation), just no ANSI codes.
             write!(writer, "{pretty}")?;
         }
 
@@ -41,77 +40,189 @@ impl Renderer for JsonRenderer {
     }
 }
 
-/// Walk the pretty-printed JSON string and apply colors character by character.
-fn highlight_json(json: &str, writer: &mut dyn Write, ctx: &RenderContext) -> Result<()> {
-    let theme = &ctx.theme;
-    let mut in_string = false;
-    let mut is_key = false;
-    let mut escape_next = false;
+/// Highlight a single JSON line (used by both JSON and NDJSON renderers).
+pub fn write_highlighted_json(json: &str, writer: &mut dyn Write, colors: &super::super::theme::JsonColors) -> Result<()> {
+    let tokens = tokenize_json(json);
+    for token in &tokens {
+        let color = match token.kind {
+            TokenKind::Key => colors.key,
+            TokenKind::StringVal => colors.string,
+            TokenKind::Number => colors.number,
+            TokenKind::Bool => colors.bool_val,
+            TokenKind::Null => colors.null,
+            TokenKind::Bracket => colors.bracket,
+            TokenKind::Punctuation | TokenKind::Whitespace => Color::Reset,
+        };
+
+        if matches!(token.kind, TokenKind::Punctuation | TokenKind::Whitespace) {
+            write!(writer, "{}", token.text)?;
+        } else {
+            write!(writer, "{}", token.text.with(color))?;
+        }
+    }
+    Ok(())
+}
+
+// ─── Tokenizer ──────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TokenKind {
+    Key,
+    StringVal,
+    Number,
+    Bool,
+    Null,
+    Bracket,
+    Punctuation,
+    Whitespace,
+}
+
+struct Token<'a> {
+    kind: TokenKind,
+    text: &'a str,
+}
+
+/// Fast single-pass tokenizer for pretty-printed JSON.
+/// Operates on string slices (zero-allocation for token text).
+///
+/// Tracks an object/array context stack to correctly distinguish
+/// keys (in objects) from string values (in arrays or after colons).
+fn tokenize_json(json: &str) -> Vec<Token<'_>> {
+    let mut tokens = Vec::new();
+    let bytes = json.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
     let mut after_colon = false;
+    // Stack: true = inside object, false = inside array.
+    let mut ctx_stack: Vec<bool> = Vec::new();
 
-    for ch in json.chars() {
-        if escape_next {
-            write_colored(writer, ch, if is_key { theme.json_key } else { theme.json_string })?;
-            escape_next = false;
-            continue;
-        }
+    let in_array = |stack: &[bool]| -> bool {
+        stack.last().copied() == Some(false)
+    };
 
-        if ch == '\\' && in_string {
-            write_colored(writer, ch, if is_key { theme.json_key } else { theme.json_string })?;
-            escape_next = true;
-            continue;
-        }
-
-        if ch == '"' {
-            if in_string {
-                write_colored(writer, ch, if is_key { theme.json_key } else { theme.json_string })?;
-                in_string = false;
-                is_key = false;
-            } else {
-                is_key = !after_colon;
-                write_colored(writer, ch, if is_key { theme.json_key } else { theme.json_string })?;
-                in_string = true;
+    while i < len {
+        let start = i;
+        match bytes[i] {
+            b' ' | b'\t' | b'\n' | b'\r' => {
+                while i < len && matches!(bytes[i], b' ' | b'\t' | b'\n' | b'\r') {
+                    i += 1;
+                }
+                tokens.push(Token { kind: TokenKind::Whitespace, text: &json[start..i] });
             }
-            continue;
-        }
-
-        if in_string {
-            write_colored(writer, ch, if is_key { theme.json_key } else { theme.json_string })?;
-            continue;
-        }
-
-        match ch {
-            ':' => {
-                write_colored(writer, ch, theme.json_bracket)?;
+            b'"' => {
+                i += 1;
+                while i < len {
+                    if bytes[i] == b'\\' {
+                        i += 2;
+                    } else if bytes[i] == b'"' {
+                        i += 1;
+                        break;
+                    } else {
+                        i += 1;
+                    }
+                }
+                // A string is a value if: (a) we're after ':', or (b) we're in an array.
+                let is_value = after_colon || in_array(&ctx_stack);
+                let kind = if is_value { TokenKind::StringVal } else { TokenKind::Key };
+                tokens.push(Token { kind, text: &json[start..i] });
+                after_colon = false;
+            }
+            b':' => {
+                i += 1;
                 after_colon = true;
+                tokens.push(Token { kind: TokenKind::Punctuation, text: &json[start..i] });
             }
-            ',' | '\n' => {
+            b',' => {
+                i += 1;
                 after_colon = false;
-                write!(writer, "{ch}")?;
+                tokens.push(Token { kind: TokenKind::Punctuation, text: &json[start..i] });
             }
-            '{' | '}' | '[' | ']' => {
+            b'{' => {
+                i += 1;
+                ctx_stack.push(true); // object
                 after_colon = false;
-                write_colored(writer, ch, theme.json_bracket)?;
+                tokens.push(Token { kind: TokenKind::Bracket, text: &json[start..i] });
             }
-            _ if ch.is_ascii_digit() || ch == '-' || ch == '.' => {
-                write_colored(writer, ch, theme.json_number)?;
+            b'[' => {
+                i += 1;
+                ctx_stack.push(false); // array
+                after_colon = false;
+                tokens.push(Token { kind: TokenKind::Bracket, text: &json[start..i] });
             }
-            't' | 'f' | 'r' | 'u' | 'e' | 'a' | 'l' | 's' => {
-                write_colored(writer, ch, theme.json_bool)?;
+            b'}' | b']' => {
+                i += 1;
+                ctx_stack.pop();
+                after_colon = false;
+                tokens.push(Token { kind: TokenKind::Bracket, text: &json[start..i] });
             }
-            'n' => {
-                write_colored(writer, ch, theme.json_null)?;
+            b't' if json[i..].starts_with("true") => {
+                i += 4;
+                after_colon = false;
+                tokens.push(Token { kind: TokenKind::Bool, text: &json[start..i] });
+            }
+            b'f' if json[i..].starts_with("false") => {
+                i += 5;
+                after_colon = false;
+                tokens.push(Token { kind: TokenKind::Bool, text: &json[start..i] });
+            }
+            b'n' if json[i..].starts_with("null") => {
+                i += 4;
+                after_colon = false;
+                tokens.push(Token { kind: TokenKind::Null, text: &json[start..i] });
+            }
+            b'0'..=b'9' | b'-' => {
+                while i < len && matches!(bytes[i], b'0'..=b'9' | b'.' | b'-' | b'+' | b'e' | b'E') {
+                    i += 1;
+                }
+                after_colon = false;
+                tokens.push(Token { kind: TokenKind::Number, text: &json[start..i] });
             }
             _ => {
-                write!(writer, "{ch}")?;
+                i += 1;
+                tokens.push(Token { kind: TokenKind::Punctuation, text: &json[start..i] });
             }
         }
     }
 
-    Ok(())
+    tokens
 }
 
-fn write_colored(writer: &mut dyn Write, ch: char, color: style::Color) -> Result<()> {
-    write!(writer, "{}", format!("{ch}").with(color))?;
-    Ok(())
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokenizer_identifies_keys_vs_values() {
+        let json = r#"{"name": "prezzy", "count": 42, "ok": true, "x": null}"#;
+        let tokens = tokenize_json(json);
+
+        let keys: Vec<&str> = tokens.iter()
+            .filter(|t| t.kind == TokenKind::Key)
+            .map(|t| t.text)
+            .collect();
+        assert_eq!(keys, vec![r#""name""#, r#""count""#, r#""ok""#, r#""x""#]);
+
+        let strings: Vec<&str> = tokens.iter()
+            .filter(|t| t.kind == TokenKind::StringVal)
+            .map(|t| t.text)
+            .collect();
+        assert_eq!(strings, vec![r#""prezzy""#]);
+
+        assert!(tokens.iter().any(|t| t.kind == TokenKind::Number && t.text == "42"));
+        assert!(tokens.iter().any(|t| t.kind == TokenKind::Bool && t.text == "true"));
+        assert!(tokens.iter().any(|t| t.kind == TokenKind::Null && t.text == "null"));
+    }
+
+    #[test]
+    fn tokenizer_handles_arrays() {
+        let json = r#"["a", "b", 1]"#;
+        let tokens = tokenize_json(json);
+
+        // In arrays, strings are values not keys
+        let strings: Vec<&str> = tokens.iter()
+            .filter(|t| t.kind == TokenKind::StringVal)
+            .map(|t| t.text)
+            .collect();
+        assert_eq!(strings, vec![r#""a""#, r#""b""#]);
+    }
 }
