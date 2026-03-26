@@ -56,6 +56,8 @@ pub struct RenderContext<'a> {
     pub terminal: &'a TerminalContext,
     pub theme: &'a Theme,
     pub level_filter: Option<LevelFilter>,
+    /// Use ASCII box-drawing instead of Unicode.
+    pub ascii: bool,
 }
 
 /// Log level filtering.
@@ -96,6 +98,7 @@ pub struct RenderEngine<'a> {
     theme: &'a Theme,
     format_override: Option<crate::cli::FormatOverride>,
     level_filter: Option<LevelFilter>,
+    ascii: bool,
 }
 
 impl<'a> RenderEngine<'a> {
@@ -107,6 +110,7 @@ impl<'a> RenderEngine<'a> {
             theme,
             format_override: args.format,
             level_filter,
+            ascii: args.ascii,
         }
     }
 
@@ -122,6 +126,7 @@ impl<'a> RenderEngine<'a> {
             terminal: self.terminal,
             theme: self.theme,
             level_filter: self.level_filter,
+            ascii: self.ascii,
         };
 
         if renderer.wants_full_input() {

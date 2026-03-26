@@ -56,17 +56,18 @@ impl Renderer for CsvRenderer {
 
         let colored = ctx.terminal.color_enabled;
         let border_color = Color::DarkGrey;
+        let b = if ctx.ascii { &ASCII_BORDERS } else { &UNICODE_BORDERS };
 
         // Top border.
-        write_border(writer, &col_widths, '┌', '┬', '┐', colored, border_color)?;
+        write_border(writer, &col_widths, [b.top_left, b.top_mid, b.top_right, b.horiz], colored, border_color)?;
         writeln!(writer)?;
 
         for (row_idx, row) in rows.iter().enumerate() {
-            // Row content.
+            let pipe = b.vert;
             if colored {
-                write!(writer, "{}", "│".with(border_color))?;
+                write!(writer, "{}", pipe.with(border_color))?;
             } else {
-                write!(writer, "│")?;
+                write!(writer, "{pipe}")?;
             }
 
             for (col, width) in col_widths.iter().enumerate() {
@@ -76,7 +77,6 @@ impl Renderer for CsvRenderer {
 
                 write!(writer, " ")?;
                 if colored && row_idx == 0 {
-                    // Header row: bold cyan.
                     write!(writer, "{}", truncated.as_str().with(Color::Cyan).attribute(Attribute::Bold))?;
                 } else {
                     write!(writer, "{truncated}")?;
@@ -84,42 +84,60 @@ impl Renderer for CsvRenderer {
                 write!(writer, "{:padding$} ", "")?;
 
                 if colored {
-                    write!(writer, "{}", "│".with(border_color))?;
+                    write!(writer, "{}", pipe.with(border_color))?;
                 } else {
-                    write!(writer, "│")?;
+                    write!(writer, "{pipe}")?;
                 }
             }
             writeln!(writer)?;
 
-            // Separator after header row.
             if row_idx == 0 {
-                write_border(writer, &col_widths, '├', '┼', '┤', colored, border_color)?;
+                write_border(writer, &col_widths, [b.mid_left, b.mid_mid, b.mid_right, b.horiz], colored, border_color)?;
                 writeln!(writer)?;
             }
         }
 
-        // Bottom border.
-        write_border(writer, &col_widths, '└', '┴', '┘', colored, border_color)?;
+        write_border(writer, &col_widths, [b.bot_left, b.bot_mid, b.bot_right, b.horiz], colored, border_color)?;
 
         Ok(())
     }
 }
 
+struct BorderChars {
+    top_left: char, top_mid: char, top_right: char,
+    mid_left: char, mid_mid: char, mid_right: char,
+    bot_left: char, bot_mid: char, bot_right: char,
+    horiz: char, vert: char,
+}
+
+const UNICODE_BORDERS: BorderChars = BorderChars {
+    top_left: '┌', top_mid: '┬', top_right: '┐',
+    mid_left: '├', mid_mid: '┼', mid_right: '┤',
+    bot_left: '└', bot_mid: '┴', bot_right: '┘',
+    horiz: '─', vert: '│',
+};
+
+const ASCII_BORDERS: BorderChars = BorderChars {
+    top_left: '+', top_mid: '+', top_right: '+',
+    mid_left: '+', mid_mid: '+', mid_right: '+',
+    bot_left: '+', bot_mid: '+', bot_right: '+',
+    horiz: '-', vert: '|',
+};
+
+/// `chars`: [left, mid, right, horiz]
 fn write_border(
     writer: &mut dyn Write,
     widths: &[usize],
-    left: char,
-    mid: char,
-    right: char,
+    chars: [char; 4],
     colored: bool,
     color: Color,
 ) -> Result<()> {
-    let mut s = String::new();
+    let [left, mid, right, horiz] = chars;
+    let mut s = String::with_capacity(widths.len() * 8);
     s.push(left);
     for (i, &w) in widths.iter().enumerate() {
-        // +2 for the padding spaces on each side.
         for _ in 0..w + 2 {
-            s.push('─');
+            s.push(horiz);
         }
         if i < widths.len() - 1 {
             s.push(mid);
