@@ -1,0 +1,66 @@
+[package]
+name = "prezzy"
+version = "0.1.0"
+edition = "2024"
+authors = ["prezzy contributors"]
+description = "Make any CLI output beautiful. Zero config. Just pipe."
+license = "MIT"
+repository = "https://github.com/prezzy-cli/prezzy"
+homepage = "https://github.com/prezzy-cli/prezzy"
+readme = "README.md"
+keywords = ["cli", "terminal", "beautify", "pretty", "formatting"]
+categories = ["command-line-utilities", "text-processing"]
+rust-version = "1.85.0"
+
+[[bin]]
+name = "prezzy"
+path = "src/main.rs"
+
+[lib]
+name = "prezzy"
+path = "src/lib.rs"
+
+[dependencies]
+# CLI argument parsing
+clap = { version = "4", features = ["derive", "env", "wrap_help"] }
+
+# Terminal handling
+crossterm = "0.28"
+
+# JSON
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+anyhow = "1"
+
+# Unicode width (CJK, emoji)
+unicode-width = "0.2"
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 0
+debug = true
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+# Allow these common patterns
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
