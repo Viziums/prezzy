@@ -1,6 +1,6 @@
 [package]
 name = "prezzy"
-version = "0.1.0"
+version = "0.1.2"
 edition = "2024"
 authors = ["prezzy contributors"]
 description = "Make any CLI output beautiful. Zero config. Just pipe."

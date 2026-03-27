@@ -1,6 +1,6 @@
 {
   "name": "prezzy-cli",
-  "version": "0.1.1",
+  "version": "0.0.0",
   "description": "Make any CLI output beautiful. Zero config. Just pipe.",
   "license": "MIT",
   "repository": {
@@ -22,6 +22,15 @@
   "scripts": {
     "postinstall": "node install.js"
   },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
   "files": [
     "bin/",
     "install.js",
