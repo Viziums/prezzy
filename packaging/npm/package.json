@@ -1,6 +1,6 @@
 {
-  "name": "prezzy",
-  "version": "0.1.0",
+  "name": "prezzy-cli",
+  "version": "0.1.1",
   "description": "Make any CLI output beautiful. Zero config. Just pipe.",
   "license": "MIT",
   "repository": {
@@ -24,6 +24,7 @@
   },
   "files": [
     "bin/",
-    "install.js"
+    "install.js",
+    "README.md"
   ]
 }

@@ -22,7 +22,7 @@ cargo install prezzy
 
 **npm** (via binary wrapper)
 ```sh
-npx prezzy
+npm install -g prezzy-cli
 ```
 
 **Pre-built binaries**
