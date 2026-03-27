@@ -114,17 +114,7 @@ if (!fs.existsSync(binPath)) {
   process.exit(1);
 }
 
-if (process.platform === "win32") {
-  // npm resolves the "bin" entry to bin/prezzy (no .exe), so create a shell
-  // shim that forwards to the real .exe. This lets npm's cmd wrapper find it.
-  const shimPath = path.join(binDir, "prezzy");
-  if (!fs.existsSync(shimPath)) {
-    fs.writeFileSync(
-      shimPath,
-      '#!/bin/sh\nexec "$(dirname "$0")/prezzy.exe" "$@"\n'
-    );
-  }
-} else {
+if (process.platform !== "win32") {
   fs.chmodSync(binPath, 0o755);
 }
 console.log("prezzy installed successfully.");
