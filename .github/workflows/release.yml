@@ -120,7 +120,7 @@ jobs:
         run: |
           cp README.md packaging/npm/README.md
           cd packaging/npm
-          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version
+          npm version "${{ steps.version.outputs.version }}" --no-git-tag-version --allow-same-version
 
       - name: Publish
         run: |
