@@ -2,6 +2,8 @@
 
 Make any CLI output beautiful. Zero config. Just pipe.
 
+![prezzy demo](demo/prezzy-demo.gif)
+
 ```sh
 command | prezzy
 ```
