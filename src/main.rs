@@ -10,6 +10,15 @@ use prezzy::theme;
 fn main() {
     let mut args = Args::parse();
 
+    // Shell mode subcommand — runs before any pipe-mode logic.
+    if let Some(prezzy::cli::Command::Shell(ref shell_args)) = args.command {
+        if let Err(err) = prezzy::shell::run(shell_args) {
+            eprintln!("prezzy: {err:#}");
+            process::exit(1);
+        }
+        return;
+    }
+
     // Handle meta commands that don't process input.
     if let Some(shell) = args.completions {
         Args::print_completions(shell);

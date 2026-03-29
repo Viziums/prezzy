@@ -151,19 +151,25 @@ impl<'a> RenderEngine<'a> {
     }
 
     fn renderer_for(format: Format) -> Box<dyn Renderer> {
-        match format {
-            Format::Json => Box::new(JsonRenderer),
-            Format::Ndjson => Box::new(NdjsonRenderer),
-            Format::Log => Box::new(LogRenderer),
-            Format::Diff => Box::new(DiffRenderer),
-            Format::StackTrace => Box::new(StackTraceRenderer),
-            Format::Csv => Box::new(CsvRenderer::comma()),
-            Format::Tsv => Box::new(CsvRenderer::tab()),
-            Format::KeyValue => Box::new(KeyValueRenderer),
-            Format::Yaml => Box::new(YamlRenderer),
-            Format::Xml => Box::new(XmlRenderer),
-            Format::Markdown => Box::new(MarkdownRenderer::new()),
-            _ => Box::new(PlainRenderer),
-        }
+        renderer_for(format)
+    }
+}
+
+/// Create the appropriate renderer for a detected format.
+#[must_use]
+pub fn renderer_for(format: Format) -> Box<dyn Renderer> {
+    match format {
+        Format::Json => Box::new(JsonRenderer),
+        Format::Ndjson => Box::new(NdjsonRenderer),
+        Format::Log => Box::new(LogRenderer),
+        Format::Diff => Box::new(DiffRenderer),
+        Format::StackTrace => Box::new(StackTraceRenderer),
+        Format::Csv => Box::new(CsvRenderer::comma()),
+        Format::Tsv => Box::new(CsvRenderer::tab()),
+        Format::KeyValue => Box::new(KeyValueRenderer),
+        Format::Yaml => Box::new(YamlRenderer),
+        Format::Xml => Box::new(XmlRenderer),
+        Format::Markdown => Box::new(MarkdownRenderer::new()),
+        _ => Box::new(PlainRenderer),
     }
 }

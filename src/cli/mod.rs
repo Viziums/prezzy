@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 
 #[derive(Parser, Debug)]
@@ -61,6 +61,38 @@ pub struct Args {
     /// Generate shell completions and exit.
     #[arg(long, value_enum, hide = true)]
     pub completions: Option<Shell>,
+
+    /// Subcommand (e.g. `prezzy shell`).
+    #[command(subcommand)]
+    pub command: Option<Command>,
+}
+
+/// Subcommands.
+#[derive(Debug, Subcommand)]
+pub enum Command {
+    /// Launch an interactive shell with automatic output beautification.
+    ///
+    /// Wraps your shell in a PTY, detects command output formats, and renders
+    /// them with syntax highlighting — transparently, without changing how
+    /// your shell works. Programs using alternate screen (vim, htop, less)
+    /// are passed through unmodified.
+    Shell(ShellArgs),
+}
+
+/// Arguments for `prezzy shell`.
+#[derive(Debug, clap::Args)]
+pub struct ShellArgs {
+    /// Color theme.
+    #[arg(short, long, default_value = "default", env = "PREZZY_THEME")]
+    pub theme: String,
+
+    /// Filter log output by minimum level.
+    #[arg(short, long)]
+    pub level: Option<String>,
+
+    /// Use ASCII characters instead of Unicode box-drawing.
+    #[arg(long, env = "PREZZY_ASCII")]
+    pub ascii: bool,
 }
 
 impl Args {

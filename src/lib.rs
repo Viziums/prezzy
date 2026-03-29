@@ -3,6 +3,7 @@ pub mod config;
 pub mod detect;
 pub mod input;
 pub mod render;
+pub mod shell;
 pub mod terminal;
 pub mod theme;
 
