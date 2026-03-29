@@ -1,0 +1,4 @@
+{"level":"info","ts":"2024-01-15T10:30:45Z","msg":"server started","port":8080,"env":"production"}
+{"level":"info","ts":"2024-01-15T10:30:45Z","msg":"connected to database","latency_ms":12}
+{"level":"warn","ts":"2024-01-15T10:30:46Z","msg":"slow query detected","duration_ms":2300,"query":"SELECT *"}
+{"level":"error","ts":"2024-01-15T10:30:47Z","msg":"connection refused","service":"redis","retry":3}

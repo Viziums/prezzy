@@ -1,0 +1,1 @@
+{"name":"prezzy","description":"Make any CLI output beautiful","version":"1.0.0","features":["json","logs","diff","csv","yaml","xml"],"config":{"auto_detect":true,"themes":12},"awesome":true}

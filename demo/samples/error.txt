@@ -1,0 +1,5 @@
+TypeError: Cannot read properties of undefined (reading 'map')
+    at processItems (/app/src/handler.js:42:15)
+    at async Router.handle (/app/src/router.js:18:5)
+    at async Layer.handle (/app/node_modules/express/lib/router/layer.js:95:5)
+    at async Server.emit (node:events:519:28)
