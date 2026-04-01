@@ -112,6 +112,11 @@ impl<'a> OutputBeautifier<'a> {
         self.raw_buffer.clear();
         self.clean_lines.clear();
         self.renderer = None;
+
+        // Refresh terminal width — may have changed since last command.
+        if let Ok((w, _)) = crossterm::terminal::size() {
+            self.terminal.width = w;
+        }
     }
 
     /// Feed raw PTY bytes (for passthrough fallback).

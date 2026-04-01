@@ -60,6 +60,7 @@ pub fn spawn_shell(
     shell_name: &str,
     cols: u16,
     rows: u16,
+    passthrough: bool,
 ) -> Result<PtySession> {
     let pty_system = native_pty_system();
 
@@ -87,8 +88,12 @@ pub fn spawn_shell(
     // Mark this as a prezzy shell session (for nested-session detection).
     cmd.env("PREZZY_SHELL", "1");
 
-    // Inject OSC 133 shell integration markers.
-    let cleanup_path = super::inject::prepare_command(&mut cmd, shell_name)?;
+    // Inject OSC 133 shell integration markers (skip in passthrough mode).
+    let cleanup_path = if passthrough {
+        None
+    } else {
+        super::inject::prepare_command(&mut cmd, shell_name)?
+    };
 
     let child = pair
         .slave

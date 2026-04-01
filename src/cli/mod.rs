@@ -93,6 +93,11 @@ pub struct ShellArgs {
     /// Use ASCII characters instead of Unicode box-drawing.
     #[arg(long, env = "PREZZY_ASCII")]
     pub ascii: bool,
+
+    /// Disable beautification (pure PTY passthrough).
+    /// Useful for debugging or when beautification interferes with a program.
+    #[arg(long)]
+    pub passthrough: bool,
 }
 
 impl Args {

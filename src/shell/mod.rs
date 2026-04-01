@@ -51,18 +51,22 @@ pub fn run(args: &ShellArgs) -> Result<()> {
     let shell_name = pty::shell_basename(&shell_path);
     let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
 
-    eprintln!(
-        "prezzy: launching {shell_name} in shell mode (beautification active)"
-    );
+    if args.passthrough {
+        eprintln!("prezzy: launching {shell_name} in passthrough mode");
+    } else {
+        eprintln!("prezzy: launching {shell_name} in shell mode (beautification active)");
+    }
 
     // Spawn child shell in a PTY. PtySession cleans up temp files on drop.
-    let mut session = pty::spawn_shell(&shell_path, &shell_name, cols, rows)?;
+    let mut session =
+        pty::spawn_shell(&shell_path, &shell_name, cols, rows, args.passthrough)?;
 
     // Put the outer terminal into raw mode so keystrokes pass through.
     let raw_guard = io::RawModeGuard::enable()?;
 
     // Run I/O threads — blocks until the child shell exits.
-    let exit_code = io::run(&*session.master, &theme, level_filter, ascii)?;
+    let exit_code =
+        io::run(&*session.master, &theme, level_filter, ascii, args.passthrough)?;
 
     // Restore terminal before printing anything.
     drop(raw_guard);
