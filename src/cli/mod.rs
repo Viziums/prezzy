@@ -47,7 +47,7 @@ pub struct Args {
     pub level: Option<String>,
 
     /// Use ASCII characters instead of Unicode box-drawing.
-    #[arg(long, env = "PREZZY_ASCII")]
+    #[arg(long, env = "PREZZY_ASCII", value_parser = parse_bool_env, num_args = 0, default_missing_value = "true")]
     pub ascii: bool,
 
     /// Pipe output through a pager (less).
@@ -91,7 +91,7 @@ pub struct ShellArgs {
     pub level: Option<String>,
 
     /// Use ASCII characters instead of Unicode box-drawing.
-    #[arg(long, env = "PREZZY_ASCII")]
+    #[arg(long, env = "PREZZY_ASCII", value_parser = parse_bool_env, num_args = 0, default_missing_value = "true")]
     pub ascii: bool,
 
     /// Disable beautification (pure PTY passthrough).
@@ -131,6 +131,15 @@ pub enum ColorMode {
     Always,
     /// Never emit colors.
     Never,
+}
+
+/// Parse boolean values from env vars, accepting 1/0/true/false/yes/no.
+fn parse_bool_env(s: &str) -> Result<bool, String> {
+    match s.to_lowercase().as_str() {
+        "true" | "1" | "yes" => Ok(true),
+        "false" | "0" | "no" | "" => Ok(false),
+        other => Err(format!("invalid boolean value '{other}', expected true/false/1/0/yes/no")),
+    }
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
