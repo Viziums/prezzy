@@ -55,11 +55,6 @@ impl ShellParser {
         }
     }
 
-    /// Whether we should buffer output for beautification.
-    pub fn is_buffering(&self) -> bool {
-        self.command_state == CommandState::CommandRunning && !self.alternate_screen
-    }
-
     /// Take all complete clean lines accumulated so far, leaving the
     /// internal buffer empty.
     pub fn take_clean_lines(&mut self) -> Vec<String> {
@@ -167,6 +162,9 @@ impl vte::Perform for ShellParser {
                     if let Ok(s) = std::str::from_utf8(params[2]) {
                         self.exit_code = s.parse::<i32>().ok();
                     }
+                } else {
+                    // Bare D without exit code -- assume success.
+                    self.exit_code = Some(0);
                 }
             }
             _ => {}
@@ -263,7 +261,7 @@ mod tests {
     }
 
     #[test]
-    fn d_marker_without_exit_code_leaves_previous() {
+    fn d_marker_without_exit_code_assumes_success() {
         let mut p = ShellParser::new();
         let mut vte = vte::Parser::new();
 
@@ -271,11 +269,10 @@ mod tests {
         feed(&mut p, &mut vte, b"\x1b]133;D;5\x07");
         assert_eq!(p.exit_code, Some(5));
 
-        // A bare D with no code field doesn't reset the exit code.
+        // A bare D with no code field assumes success (0).
         feed(&mut p, &mut vte, b"\x1b]133;C\x07");
         feed(&mut p, &mut vte, b"\x1b]133;D\x07");
-        // exit_code is unchanged because params.len() < 3.
-        assert_eq!(p.exit_code, Some(5));
+        assert_eq!(p.exit_code, Some(0));
     }
 
     // -- Alternate screen detection -------------------------------------------

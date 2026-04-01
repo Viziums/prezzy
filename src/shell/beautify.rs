@@ -124,10 +124,12 @@ impl<'a> OutputBeautifier<'a> {
     /// If the raw buffer exceeds [`MAX_RAW_BUFFER`], returns `true` to signal
     /// the caller should force a flush to passthrough.
     pub fn feed_raw(&mut self, raw: &[u8]) -> bool {
-        if matches!(self.state, State::Buffering | State::RenderingFull) {
+        if self.state == State::Buffering {
             self.raw_buffer.extend_from_slice(raw);
             return self.raw_buffer.len() > MAX_RAW_BUFFER;
         }
+        // RenderingFull only uses clean_lines -- skip raw accumulation to
+        // avoid wasting memory on bytes the renderer will never read.
         false
     }
 
@@ -265,9 +267,20 @@ impl<'a> OutputBeautifier<'a> {
         Ok(())
     }
 
-    /// Discard buffered output and reset to idle (e.g. on alt-screen enter).
+    /// Flush buffered output and reset to idle (e.g. on alt-screen enter).
+    ///
+    /// Unlike [`finish`], this does not attempt rendering -- it dumps whatever
+    /// raw bytes we have so the user doesn't lose output that arrived before
+    /// the alternate screen was entered.
     pub fn abort(&mut self, w: &mut impl Write) -> Result<()> {
-        if !self.raw_buffer.is_empty() {
+        // In RenderingFull state the raw_buffer may be stale (renderer only
+        // uses clean_lines), so flush clean_lines as plain text instead.
+        if self.state == State::RenderingFull && !self.clean_lines.is_empty() {
+            for line in &self.clean_lines {
+                writeln!(w, "{line}")?;
+            }
+            w.flush()?;
+        } else if !self.raw_buffer.is_empty() {
             w.write_all(&self.raw_buffer)?;
             w.flush()?;
         }

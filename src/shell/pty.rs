@@ -65,8 +65,8 @@ pub fn spawn_shell(
     let pty_system = native_pty_system();
 
     let size = PtySize {
-        rows,
-        cols,
+        rows: rows.max(2),
+        cols: cols.max(2),
         pixel_width: 0,
         pixel_height: 0,
     };

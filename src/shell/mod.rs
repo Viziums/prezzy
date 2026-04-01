@@ -36,6 +36,7 @@ pub fn run(args: &ShellArgs) -> Result<()> {
     let default_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         let _ = crossterm::terminal::disable_raw_mode();
+        let _ = std::io::Write::flush(&mut std::io::stdout());
         default_hook(info);
     }));
 
