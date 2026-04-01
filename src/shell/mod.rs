@@ -54,8 +54,19 @@ pub fn run(args: &ShellArgs) -> Result<()> {
 
     if args.passthrough {
         eprintln!("prezzy: launching {shell_name} in passthrough mode");
-    } else {
+    } else if inject::is_supported(&shell_name) {
         eprintln!("prezzy: launching {shell_name} in shell mode (beautification active)");
+    } else {
+        eprintln!(
+            "prezzy: launching {shell_name} (unsupported shell — output will pass through without beautification)\n\
+             Tip: supported shells are {}.",
+            inject::SUPPORTED_SHELLS
+                .iter()
+                .filter(|&&s| s != "powershell") // "pwsh" covers both
+                .copied()
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
     }
 
     // Spawn child shell in a PTY. PtySession cleans up temp files on drop.

@@ -164,84 +164,109 @@ fn output_loop(
 
         let is_cmd = state.command_state == CommandState::CommandRunning;
 
-        // --- Alternate screen: always raw passthrough ---
-        if state.alternate_screen {
-            if beautifier.is_active() {
-                beautifier.abort(&mut stdout)?;
-            }
-            stdout.write_all(chunk)?;
-            stdout.flush()?;
-            continue;
-        }
-
-        // --- State machine transitions ---
-        match (was_cmd, is_cmd) {
-            // Command just started executing.
-            (false, true) => {
-                beautifier.start();
-                let overflow = beautifier.feed_raw(chunk);
-                beautifier.feed_lines(state.take_clean_lines());
-                if overflow || beautifier.over_limit() {
-                    beautifier.force_passthrough(&mut stdout)?;
-                } else if beautifier.should_detect() {
-                    beautifier.detect_and_render(&mut stdout)?;
+        // Process the chunk through the beautification pipeline.
+        // Broken-pipe on stdout means the parent/terminal is gone — exit cleanly.
+        if let Err(e) = process_chunk(
+            chunk,
+            &mut state,
+            &mut beautifier,
+            &mut stdout,
+            was_cmd,
+            is_cmd,
+        ) {
+            if let Some(io_err) = e.downcast_ref::<io::Error>() {
+                if is_output_dead(io_err) {
+                    break;
                 }
             }
-
-            // Command is still running.
-            (true, true) => {
-                let new_lines = state.take_clean_lines();
-
-                if beautifier.is_passthrough() {
-                    // Format was Plain — forward raw.
-                    stdout.write_all(chunk)?;
-                    stdout.flush()?;
-                } else if beautifier.is_rendering() {
-                    // Line-by-line renderer active — render new lines.
-                    if !new_lines.is_empty() {
-                        beautifier.render_lines(&new_lines, &mut stdout)?;
-                    }
-                } else {
-                    // Still buffering for detection.
-                    let overflow = beautifier.feed_raw(chunk);
-                    beautifier.feed_lines(new_lines);
-
-                    if overflow || beautifier.over_limit() {
-                        // Buffer too large — abort beautification, passthrough.
-                        beautifier.force_passthrough(&mut stdout)?;
-                    } else if beautifier.should_detect() {
-                        beautifier.detect_and_render(&mut stdout)?;
-                    }
-                }
-            }
-
-            // Command just finished.
-            (true, false) => {
-                // Feed remaining raw bytes — needed if finish() falls back to
-                // dumping raw_buffer (Plain format or Buffering state).
-                beautifier.feed_raw(chunk);
-                let new_lines = state.take_clean_lines();
-                if !new_lines.is_empty() {
-                    beautifier.feed_lines(new_lines);
-                }
-                beautifier.finish(&mut stdout)?;
-            }
-
-            // No command running — normal passthrough.
-            (false, false) => {
-                stdout.write_all(chunk)?;
-                stdout.flush()?;
-            }
+            return Err(e);
         }
     }
 
     // Flush anything left from an interrupted command.
     if beautifier.is_active() {
-        beautifier.finish(&mut stdout)?;
+        let _ = beautifier.finish(&mut stdout);
     }
-    stdout.flush()?;
+    let _ = stdout.flush();
 
     Ok(state.exit_code)
+}
+
+/// Process a single chunk of PTY output through the state machine.
+fn process_chunk(
+    chunk: &[u8],
+    state: &mut ShellParser,
+    beautifier: &mut OutputBeautifier<'_>,
+    stdout: &mut impl Write,
+    was_cmd: bool,
+    is_cmd: bool,
+) -> anyhow::Result<()> {
+    // --- Alternate screen: always raw passthrough ---
+    if state.alternate_screen {
+        if beautifier.is_active() {
+            beautifier.abort(stdout)?;
+        }
+        stdout.write_all(chunk)?;
+        stdout.flush()?;
+        return Ok(());
+    }
+
+    // --- State machine transitions ---
+    match (was_cmd, is_cmd) {
+        // Command just started executing.
+        (false, true) => {
+            beautifier.start();
+            let overflow = beautifier.feed_raw(chunk);
+            beautifier.feed_lines(state.take_clean_lines());
+            if overflow || beautifier.over_limit() {
+                beautifier.force_passthrough(stdout)?;
+            } else if beautifier.should_detect() {
+                beautifier.detect_and_render(stdout)?;
+            }
+        }
+
+        // Command is still running.
+        (true, true) => {
+            let new_lines = state.take_clean_lines();
+
+            if beautifier.is_passthrough() {
+                stdout.write_all(chunk)?;
+                stdout.flush()?;
+            } else if beautifier.is_rendering() {
+                if !new_lines.is_empty() {
+                    beautifier.render_lines(&new_lines, stdout)?;
+                }
+            } else {
+                // Still buffering (Buffering or RenderingFull state).
+                let overflow = beautifier.feed_raw(chunk);
+                beautifier.feed_lines(new_lines);
+
+                if overflow || beautifier.over_limit() {
+                    beautifier.force_passthrough(stdout)?;
+                } else if beautifier.should_detect() {
+                    beautifier.detect_and_render(stdout)?;
+                }
+            }
+        }
+
+        // Command just finished.
+        (true, false) => {
+            beautifier.feed_raw(chunk);
+            let new_lines = state.take_clean_lines();
+            if !new_lines.is_empty() {
+                beautifier.feed_lines(new_lines);
+            }
+            beautifier.finish(stdout)?;
+        }
+
+        // No command running — normal passthrough.
+        (false, false) => {
+            stdout.write_all(chunk)?;
+            stdout.flush()?;
+        }
+    }
+
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -280,8 +305,12 @@ fn passthrough_loop(
             }
         }
 
-        stdout.write_all(&buf[..n])?;
-        stdout.flush()?;
+        if let Err(e) = stdout.write_all(&buf[..n]).and_then(|()| stdout.flush()) {
+            if is_output_dead(&e) {
+                break;
+            }
+            return Err(e.into());
+        }
     }
 
     Ok(None) // No exit code tracking in passthrough mode.
@@ -297,6 +326,14 @@ fn is_eof_like(e: &io::Error) -> bool {
     )
 }
 
+/// Returns `true` for I/O errors that mean stdout is no longer writable.
+fn is_output_dead(e: &io::Error) -> bool {
+    matches!(
+        e.kind(),
+        io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Integration tests — exercise the full parser + beautifier pipeline
 // ---------------------------------------------------------------------------
@@ -306,8 +343,8 @@ mod tests {
     use super::*;
     use crate::theme::Theme;
 
-    /// Simulate the output loop by feeding chunks through the same state
-    /// machine logic used in production. Returns (output_bytes, exit_code).
+    /// Simulate the output loop by feeding chunks through the same
+    /// `process_chunk` function used in production. Returns (output_bytes, exit_code).
     fn simulate(chunks: &[&[u8]]) -> (Vec<u8>, Option<i32>) {
         let theme = Theme::by_name("default");
         let mut vte_parser = vte::Parser::new();
@@ -322,55 +359,8 @@ mod tests {
             }
             let is_cmd = state.command_state == CommandState::CommandRunning;
 
-            if state.alternate_screen {
-                if beautifier.is_active() {
-                    beautifier.abort(&mut out).unwrap();
-                }
-                out.extend_from_slice(chunk);
-                continue;
-            }
-
-            match (was_cmd, is_cmd) {
-                (false, true) => {
-                    beautifier.start();
-                    let overflow = beautifier.feed_raw(chunk);
-                    beautifier.feed_lines(state.take_clean_lines());
-                    if overflow || beautifier.over_limit() {
-                        beautifier.force_passthrough(&mut out).unwrap();
-                    } else if beautifier.should_detect() {
-                        beautifier.detect_and_render(&mut out).unwrap();
-                    }
-                }
-                (true, true) => {
-                    let new_lines = state.take_clean_lines();
-                    if beautifier.is_passthrough() {
-                        out.extend_from_slice(chunk);
-                    } else if beautifier.is_rendering() {
-                        if !new_lines.is_empty() {
-                            beautifier.render_lines(&new_lines, &mut out).unwrap();
-                        }
-                    } else {
-                        let overflow = beautifier.feed_raw(chunk);
-                        beautifier.feed_lines(new_lines);
-                        if overflow || beautifier.over_limit() {
-                            beautifier.force_passthrough(&mut out).unwrap();
-                        } else if beautifier.should_detect() {
-                            beautifier.detect_and_render(&mut out).unwrap();
-                        }
-                    }
-                }
-                (true, false) => {
-                    beautifier.feed_raw(chunk);
-                    let new_lines = state.take_clean_lines();
-                    if !new_lines.is_empty() {
-                        beautifier.feed_lines(new_lines);
-                    }
-                    beautifier.finish(&mut out).unwrap();
-                }
-                (false, false) => {
-                    out.extend_from_slice(chunk);
-                }
-            }
+            process_chunk(chunk, &mut state, &mut beautifier, &mut out, was_cmd, is_cmd)
+                .unwrap();
         }
 
         if beautifier.is_active() {
@@ -482,38 +472,36 @@ mod tests {
     fn large_output_forces_passthrough() {
         // Generate enough data to exceed MAX_RAW_BUFFER (1 MiB).
         let big = vec![b'X'; 512 * 1024]; // 512 KiB per chunk
-        let big_ref: &[u8] = &big;
-
-        // We need to use owned data, so build the simulation manually.
         let theme = Theme::by_name("default");
         let mut vte_parser = vte::Parser::new();
         let mut state = ShellParser::new();
         let mut beautifier = OutputBeautifier::new(&theme, None, false);
         let mut out = Vec::new();
 
-        // Start command.
-        for &byte in &b"\x1b]133;C\x07"[..] {
+        // Start command via process_chunk.
+        let start = b"\x1b]133;C\x07";
+        let was_cmd = state.command_state == CommandState::CommandRunning;
+        for &byte in &start[..] {
             vte_parser.advance(&mut state, byte);
         }
-        beautifier.start();
-        beautifier.feed_raw(b"\x1b]133;C\x07");
-        beautifier.feed_lines(state.take_clean_lines());
+        let is_cmd = state.command_state == CommandState::CommandRunning;
+        process_chunk(start, &mut state, &mut beautifier, &mut out, was_cmd, is_cmd).unwrap();
 
         // Feed large chunks until overflow.
         for _ in 0..3 {
-            for &byte in big_ref {
+            let was_cmd = state.command_state == CommandState::CommandRunning;
+            for &byte in big.iter() {
                 vte_parser.advance(&mut state, byte);
             }
-            let overflow = beautifier.feed_raw(big_ref);
-            beautifier.feed_lines(state.take_clean_lines());
-            if overflow || beautifier.over_limit() {
-                beautifier.force_passthrough(&mut out).unwrap();
+            let is_cmd = state.command_state == CommandState::CommandRunning;
+            process_chunk(&big, &mut state, &mut beautifier, &mut out, was_cmd, is_cmd).unwrap();
+            if beautifier.is_passthrough() {
                 break;
             }
         }
 
         assert!(beautifier.is_passthrough());
-        assert!(!out.is_empty()); // Raw buffer was flushed.
+        assert!(!out.is_empty());
     }
 
     // -- No markers (unsupported shell) ---------------------------------------

@@ -165,10 +165,15 @@ impl<'a> OutputBeautifier<'a> {
 
     /// Force-flush to passthrough because buffers exceeded limits.
     pub fn force_passthrough(&mut self, w: &mut impl Write) -> Result<()> {
-        if !self.raw_buffer.is_empty() {
+        if self.state == State::RenderingFull && !self.clean_lines.is_empty() {
+            // RenderingFull doesn't keep raw bytes — flush clean lines as text.
+            for line in &self.clean_lines {
+                writeln!(w, "{line}")?;
+            }
+        } else if !self.raw_buffer.is_empty() {
             w.write_all(&self.raw_buffer)?;
-            w.flush()?;
         }
+        w.flush()?;
         self.raw_buffer.clear();
         self.clean_lines.clear();
         self.renderer = None;
@@ -585,6 +590,72 @@ mod tests {
         let mut b = make_beautifier();
         // Not calling start() — Idle state should silently ignore lines.
         b.feed_lines(vec!["ignored".into()]);
+        assert!(!b.is_active());
+    }
+
+    // -- RenderingFull overflow -----------------------------------------------
+
+    #[test]
+    fn rendering_full_force_passthrough_flushes_clean_lines() {
+        let mut b = make_beautifier();
+        let mut out = Vec::new();
+
+        b.start();
+
+        // Feed CSV to trigger RenderingFull state (CSV renderer wants full input).
+        let mut lines = Vec::with_capacity(DETECTION_BUFFER_SIZE);
+        lines.push("name,age,city".to_owned());
+        for i in 1..DETECTION_BUFFER_SIZE {
+            lines.push(format!("user{i},3{i},City{i}"));
+        }
+        let raw = lines.join("\n").into_bytes();
+        b.feed_raw(&raw);
+        b.feed_lines(lines);
+
+        b.detect_and_render(&mut out).unwrap();
+        // CSV renderer wants full input → RenderingFull.
+        assert!(b.is_active());
+        assert!(!b.is_passthrough());
+        assert!(!b.is_rendering()); // Not line-by-line.
+
+        // Feed more lines to accumulate in RenderingFull.
+        b.feed_lines(vec!["extra1,40,Boston".into(), "extra2,50,Denver".into()]);
+
+        // Force passthrough — should flush all clean lines as text.
+        b.force_passthrough(&mut out).unwrap();
+        assert!(b.is_passthrough());
+
+        let text = String::from_utf8_lossy(&out);
+        assert!(text.contains("name,age,city"));
+        assert!(text.contains("extra1,40,Boston"));
+    }
+
+    #[test]
+    fn abort_rendering_full_flushes_clean_lines() {
+        let mut b = make_beautifier();
+        let mut out = Vec::new();
+
+        b.start();
+
+        let mut lines = Vec::with_capacity(DETECTION_BUFFER_SIZE);
+        lines.push("name,age".to_owned());
+        for i in 1..DETECTION_BUFFER_SIZE {
+            lines.push(format!("user{i},{i}"));
+        }
+        let raw = lines.join("\n").into_bytes();
+        b.feed_raw(&raw);
+        b.feed_lines(lines);
+
+        b.detect_and_render(&mut out).unwrap();
+        b.feed_lines(vec!["aborted,99".into()]);
+
+        // Abort (simulating alt-screen) — should flush all clean lines.
+        out.clear();
+        b.abort(&mut out).unwrap();
+
+        let text = String::from_utf8_lossy(&out);
+        assert!(text.contains("name,age"));
+        assert!(text.contains("aborted,99"));
         assert!(!b.is_active());
     }
 }

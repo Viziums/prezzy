@@ -16,18 +16,26 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use portable_pty::CommandBuilder;
 
+/// Shells that have OSC 133 integration scripts.
+pub const SUPPORTED_SHELLS: &[&str] = &["bash", "zsh", "fish", "pwsh", "powershell"];
+
+/// Returns `true` if the given shell name has OSC 133 integration support.
+pub fn is_supported(shell_name: &str) -> bool {
+    SUPPORTED_SHELLS.iter().any(|&s| s == shell_name)
+}
+
 /// Configure the shell command for OSC 133 marker injection.
 ///
 /// Returns the path to a temporary init script (if one was created) so the
 /// caller can clean it up on exit. Returns `None` for shells that don't need
-/// a temp file or for unsupported shells.
+/// a temp file (fish) or for unsupported shells.
 pub fn prepare_command(cmd: &mut CommandBuilder, shell_name: &str) -> Result<Option<PathBuf>> {
     match shell_name {
         "bash" => inject_bash(cmd),
         "zsh" => inject_zsh(cmd),
         "fish" => Ok(inject_fish(cmd)),
         "pwsh" | "powershell" => inject_pwsh(cmd),
-        _ => Ok(None), // Unknown shell — pure passthrough, no beautification.
+        _ => Ok(None),
     }
 }
 
@@ -271,6 +279,19 @@ mod tests {
         let mut cmd = CommandBuilder::new("unknown");
         let result = prepare_command(&mut cmd, "unknown").unwrap();
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn is_supported_recognizes_all_shells() {
+        assert!(is_supported("bash"));
+        assert!(is_supported("zsh"));
+        assert!(is_supported("fish"));
+        assert!(is_supported("pwsh"));
+        assert!(is_supported("powershell"));
+        assert!(!is_supported("tcsh"));
+        assert!(!is_supported("ksh"));
+        assert!(!is_supported("cmd"));
+        assert!(!is_supported(""));
     }
 
     // -- Script content -------------------------------------------------------
