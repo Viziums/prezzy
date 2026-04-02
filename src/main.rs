@@ -10,13 +10,23 @@ use prezzy::theme;
 fn main() {
     let mut args = Args::parse();
 
-    // Shell mode subcommand — runs before any pipe-mode logic.
-    if let Some(prezzy::cli::Command::Shell(ref shell_args)) = args.command {
-        if let Err(err) = prezzy::shell::run(shell_args) {
-            eprintln!("prezzy: {err:#}");
-            process::exit(1);
+    // Subcommands — run before pipe-mode logic.
+    match args.command {
+        Some(prezzy::cli::Command::Shell(ref shell_args)) => {
+            if let Err(err) = prezzy::shell::run(shell_args) {
+                eprintln!("prezzy: {err:#}");
+                process::exit(1);
+            }
+            return;
         }
-        return;
+        Some(prezzy::cli::Command::History(ref history_args)) => {
+            if let Err(err) = run_history(history_args) {
+                eprintln!("prezzy: {err:#}");
+                process::exit(1);
+            }
+            return;
+        }
+        None => {}
     }
 
     // Handle meta commands that don't process input.
@@ -112,6 +122,146 @@ fn run_with_pager(mut args: Args) {
         });
         let _ = std::io::stdout().write_all(&output.stdout);
     }
+}
+
+fn run_history(args: &prezzy::cli::HistoryArgs) -> anyhow::Result<()> {
+    use prezzy::history::{self, HistoryDb};
+
+    let path = history::default_db_path()
+        .ok_or_else(|| anyhow::anyhow!("cannot determine data directory"))?;
+
+    if !path.exists() && !args.clear {
+        eprintln!("prezzy: no history yet — run `prezzy shell` first.");
+        return Ok(());
+    }
+
+    let db = HistoryDb::open(&path)?;
+
+    if args.clear {
+        let count = db.clear()?;
+        println!("Deleted {count} entries.");
+        return Ok(());
+    }
+
+    if args.stats {
+        let s = db.stats()?;
+        println!("Total commands:  {}", s.total_commands);
+        println!("Unique commands: {}", s.unique_commands);
+        println!("Failed commands: {}", s.failed_commands);
+        if let Some(avg) = s.avg_duration_ms {
+            println!("Avg duration:    {avg:.0}ms");
+        }
+        if s.total_commands > 0 {
+            #[allow(clippy::cast_precision_loss)]
+            let rate = (s.total_commands - s.failed_commands) as f64
+                / s.total_commands as f64
+                * 100.0;
+            println!("Success rate:    {rate:.1}%");
+        }
+        return Ok(());
+    }
+
+    if let Some(n) = args.top {
+        let top = db.top(n)?;
+        if top.is_empty() {
+            println!("No history.");
+            return Ok(());
+        }
+        // Right-align the count column.
+        let max_count = top.iter().map(|(_, c)| *c).max().unwrap_or(0);
+        let count_width = format!("{max_count}").len();
+        for (cmd, count) in &top {
+            println!("{count:>count_width$}  {cmd}");
+        }
+        return Ok(());
+    }
+
+    let records = if args.failed {
+        db.failed(args.limit)?
+    } else if args.slow {
+        db.slowest(args.limit)?
+    } else if let Some(ref pattern) = args.search {
+        db.search(pattern, args.limit)?
+    } else {
+        db.recent(args.limit)?
+    };
+
+    if records.is_empty() {
+        println!("No matching commands.");
+        return Ok(());
+    }
+
+    for record in &records {
+        print_record(record);
+    }
+
+    Ok(())
+}
+
+fn print_record(r: &prezzy::history::CommandRecord) {
+    use std::fmt::Write;
+
+    // Format timestamp as human-readable.
+    let secs = r.timestamp_ms / 1000;
+    let dt = chrono_lite(secs);
+
+    let mut meta = String::new();
+    if let Some(code) = r.exit_code {
+        if code != 0 {
+            write!(meta, " [exit {code}]").unwrap();
+        }
+    }
+    if let Some(ms) = r.duration_ms {
+        if ms >= 1000 {
+            write!(meta, " ({:.1}s)", ms as f64 / 1000.0).unwrap();
+        } else {
+            write!(meta, " ({ms}ms)").unwrap();
+        }
+    }
+    if let Some(ref cwd) = r.cwd {
+        write!(meta, " {cwd}").unwrap();
+    }
+
+    println!("{dt}  {}{meta}", r.command);
+}
+
+/// Minimal timestamp formatting without pulling in chrono.
+fn chrono_lite(epoch_secs: i64) -> String {
+    // Use platform time formatting. On failure, return raw epoch.
+    #[cfg(unix)]
+    {
+        // strftime via libc is unsafe, just do simple math.
+        let _ = epoch_secs;
+    }
+
+    // Simple approach: format as "YYYY-MM-DD HH:MM" using basic math.
+    // This is UTC, which is fine for a CLI tool.
+    const SECS_PER_DAY: i64 = 86400;
+    const SECS_PER_HOUR: i64 = 3600;
+    const SECS_PER_MIN: i64 = 60;
+
+    let days = epoch_secs / SECS_PER_DAY;
+    let time_of_day = epoch_secs % SECS_PER_DAY;
+    let hours = time_of_day / SECS_PER_HOUR;
+    let minutes = (time_of_day % SECS_PER_HOUR) / SECS_PER_MIN;
+
+    // Days since epoch → year/month/day (simplified civil calendar).
+    let (y, m, d) = days_to_ymd(days + 719_468); // shift to 0000-03-01 epoch
+    format!("{y:04}-{m:02}-{d:02} {hours:02}:{minutes:02}")
+}
+
+/// Convert day count to (year, month, day). Algorithm from Howard Hinnant.
+fn days_to_ymd(days: i64) -> (i64, i64, i64) {
+    let era = days.div_euclid(146_097);
+    let doe = days.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y, m, d)
 }
 
 fn is_broken_pipe(err: &anyhow::Error) -> bool {

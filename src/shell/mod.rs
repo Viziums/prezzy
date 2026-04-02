@@ -18,6 +18,7 @@ use anyhow::{Result, bail};
 
 use crate::cli::ShellArgs;
 use crate::config::Config;
+use crate::history;
 use crate::render::LevelFilter;
 use crate::theme::Theme;
 
@@ -69,6 +70,21 @@ pub fn run(args: &ShellArgs) -> Result<()> {
         );
     }
 
+    // Open history database (best-effort — don't fail shell mode if DB is broken).
+    let session_id = history::session_id();
+    let history_db = if history::is_disabled() || args.passthrough {
+        None
+    } else {
+        history::default_db_path().and_then(|path| {
+            history::HistoryDb::open(&path)
+                .map_err(|e| {
+                    eprintln!("prezzy: history disabled (cannot open database: {e})");
+                    e
+                })
+                .ok()
+        })
+    };
+
     // Spawn child shell in a PTY. PtySession cleans up temp files on drop.
     let mut session =
         pty::spawn_shell(&shell_path, &shell_name, cols, rows, args.passthrough)?;
@@ -77,8 +93,15 @@ pub fn run(args: &ShellArgs) -> Result<()> {
     let raw_guard = io::RawModeGuard::enable()?;
 
     // Run I/O threads — blocks until the child shell exits.
-    let exit_code =
-        io::run(&*session.master, &theme, level_filter, ascii, args.passthrough)?;
+    let exit_code = io::run(
+        &*session.master,
+        &theme,
+        level_filter,
+        ascii,
+        args.passthrough,
+        history_db.as_ref(),
+        &session_id,
+    )?;
 
     // Restore terminal before printing anything.
     drop(raw_guard);

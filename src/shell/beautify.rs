@@ -78,6 +78,8 @@ pub struct OutputBeautifier<'a> {
     clean_lines: Vec<String>,
     /// The renderer selected after detection.
     renderer: Option<Box<dyn Renderer>>,
+    /// The format detected for the current command (for history recording).
+    detected_format: Option<Format>,
 }
 
 impl<'a> OutputBeautifier<'a> {
@@ -100,6 +102,7 @@ impl<'a> OutputBeautifier<'a> {
             raw_buffer: Vec::with_capacity(8192),
             clean_lines: Vec::with_capacity(DETECTION_BUFFER_SIZE),
             renderer: None,
+            detected_format: None,
         }
     }
 
@@ -198,6 +201,7 @@ impl<'a> OutputBeautifier<'a> {
             return Ok(());
         }
 
+        self.detected_format = Some(format);
         let renderer = render::renderer_for(format);
 
         if renderer.wants_full_input() {
@@ -249,6 +253,7 @@ impl<'a> OutputBeautifier<'a> {
             State::Buffering => {
                 // Didn't collect enough lines — try detection anyway.
                 let format = detect::detect_format(&self.clean_lines, None);
+                self.detected_format = Some(format);
                 if matches!(format, Format::Plain) {
                     w.write_all(&self.raw_buffer)?;
                 } else {
@@ -307,6 +312,11 @@ impl<'a> OutputBeautifier<'a> {
         self.state == State::Rendering
     }
 
+    /// Take the detected format name (consumed on read).
+    pub fn take_detected_format(&mut self) -> Option<String> {
+        self.detected_format.take().map(|f| format!("{f:?}").to_lowercase())
+    }
+
     // -- internal -------------------------------------------------------------
 
     const fn render_context(&self) -> RenderContext<'_> {
@@ -340,6 +350,8 @@ impl<'a> OutputBeautifier<'a> {
         self.raw_buffer.clear();
         self.clean_lines.clear();
         self.renderer = None;
+        // Note: detected_format is NOT cleared here — it's consumed by
+        // take_detected_format() after finish() returns.
     }
 }
 

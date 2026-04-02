@@ -36,6 +36,12 @@ pub struct ShellParser {
     /// Exit code reported by the most recent OSC 133;D marker.
     pub exit_code: Option<i32>,
 
+    // -- command metadata (for history) ---------------------------------------
+    /// Command text from the most recent OSC 133;E marker.
+    pub command_text: Option<String>,
+    /// Working directory from the most recent OSC 133;W marker.
+    pub command_cwd: Option<String>,
+
     // -- clean text collection ------------------------------------------------
     /// Complete lines of clean text (newline-delimited) collected while a
     /// command is running. Used for format detection.
@@ -50,6 +56,8 @@ impl ShellParser {
             alternate_screen: false,
             command_state: CommandState::Idle,
             exit_code: None,
+            command_text: None,
+            command_cwd: None,
             clean_lines: Vec::new(),
             current_line: String::new(),
         }
@@ -67,6 +75,16 @@ impl ShellParser {
             self.clean_lines
                 .push(std::mem::take(&mut self.current_line));
         }
+    }
+
+    /// Take the command text reported by the E marker, if any.
+    pub fn take_command_text(&mut self) -> Option<String> {
+        self.command_text.take()
+    }
+
+    /// Take the working directory reported by the W marker, if any.
+    pub fn take_command_cwd(&mut self) -> Option<String> {
+        self.command_cwd.take()
     }
 
     /// Reset collection state for a new command.
@@ -136,6 +154,8 @@ impl vte::Perform for ShellParser {
     ///   OSC 133 ; A ST — prompt start
     ///   OSC 133 ; C ST — command executing / output begins
     ///   OSC 133 ; D [; `exit_code`] ST — command finished
+    ///   OSC 133 ; E [; `command`]  ST — command text (prezzy extension)
+    ///   OSC 133 ; W [; `cwd`]     ST — working directory (prezzy extension)
     fn osc_dispatch(&mut self, params: &[&[u8]], _bell_terminated: bool) {
         if params.len() < 2 || params[0] != b"133" {
             return;
@@ -167,6 +187,19 @@ impl vte::Perform for ShellParser {
                     self.exit_code = Some(0);
                 }
             }
+            b"E" => {
+                // Command text — join remaining params with ";" since
+                // VTE splits on ";" and the command may contain semicolons.
+                if params.len() >= 3 {
+                    self.command_text = Some(join_params(&params[2..]));
+                }
+            }
+            b"W" => {
+                // Working directory — same join logic for paths with ";".
+                if params.len() >= 3 {
+                    self.command_cwd = Some(join_params(&params[2..]));
+                }
+            }
             _ => {}
         }
     }
@@ -174,6 +207,15 @@ impl vte::Perform for ShellParser {
     // The remaining vte::Perform methods have no-op defaults, which is fine
     // — we don't need to track DCS, ESC dispatches, or hooks for our
     // use-case.
+}
+
+/// Reconstruct a string from OSC params that were split on ";".
+fn join_params(parts: &[&[u8]]) -> String {
+    parts
+        .iter()
+        .filter_map(|p| std::str::from_utf8(p).ok())
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 #[cfg(test)]
@@ -468,6 +510,65 @@ mod tests {
         assert!(!p.alternate_screen);
         feed(&mut p, &mut vte, b"h");
         assert!(p.alternate_screen);
+    }
+
+    // -- Ignores unrelated OSC sequences --------------------------------------
+
+    // -- Command text (E marker) and CWD (W marker) ---------------------------
+
+    #[test]
+    fn e_marker_captures_command_text() {
+        let mut p = ShellParser::new();
+        let mut vte = vte::Parser::new();
+
+        feed(&mut p, &mut vte, b"\x1b]133;E;echo hello\x07");
+        assert_eq!(p.command_text.as_deref(), Some("echo hello"));
+    }
+
+    #[test]
+    fn e_marker_with_semicolons_in_command() {
+        let mut p = ShellParser::new();
+        let mut vte = vte::Parser::new();
+
+        // Command: echo a; echo b — VTE splits on ";" so we rejoin.
+        feed(&mut p, &mut vte, b"\x1b]133;E;echo a; echo b\x07");
+        assert_eq!(p.command_text.as_deref(), Some("echo a; echo b"));
+    }
+
+    #[test]
+    fn w_marker_captures_cwd() {
+        let mut p = ShellParser::new();
+        let mut vte = vte::Parser::new();
+
+        feed(&mut p, &mut vte, b"\x1b]133;W;/home/user/project\x07");
+        assert_eq!(p.command_cwd.as_deref(), Some("/home/user/project"));
+    }
+
+    #[test]
+    fn take_command_text_clears() {
+        let mut p = ShellParser::new();
+        let mut vte = vte::Parser::new();
+
+        feed(&mut p, &mut vte, b"\x1b]133;E;ls\x07");
+        assert_eq!(p.take_command_text().as_deref(), Some("ls"));
+        assert!(p.take_command_text().is_none()); // consumed
+    }
+
+    #[test]
+    fn e_and_w_in_full_lifecycle() {
+        let mut p = ShellParser::new();
+        let mut vte = vte::Parser::new();
+
+        feed(&mut p, &mut vte, b"\x1b]133;A\x07");
+        feed(&mut p, &mut vte, b"\x1b]133;E;git status\x07");
+        feed(&mut p, &mut vte, b"\x1b]133;W;/repo\x07");
+        feed(&mut p, &mut vte, b"\x1b]133;C\x07");
+        feed(&mut p, &mut vte, b"output\n");
+        feed(&mut p, &mut vte, b"\x1b]133;D;0\x07");
+
+        assert_eq!(p.command_text.as_deref(), Some("git status"));
+        assert_eq!(p.command_cwd.as_deref(), Some("/repo"));
+        assert_eq!(p.exit_code, Some(0));
     }
 
     // -- Ignores unrelated OSC sequences --------------------------------------

@@ -87,6 +87,8 @@ __prezzy_preexec() {
     case "$BASH_COMMAND" in
         __prezzy_*|"$PROMPT_COMMAND") return ;;
     esac
+    builtin printf '\033]133;E;%s\007' "$BASH_COMMAND"
+    builtin printf '\033]133;W;%s\007' "$PWD"
     builtin printf '\033]133;C\007'
     # Chain the user's original DEBUG trap.
     [ -n "$__prezzy_orig_debug_trap" ] && eval "$__prezzy_orig_debug_trap"
@@ -137,6 +139,8 @@ __prezzy_precmd() {{
     printf '\033]133;A\007'
 }}
 __prezzy_preexec() {{
+    printf '\033]133;E;%s\007' "$1"
+    printf '\033]133;W;%s\007' "$PWD"
     printf '\033]133;C\007'
 }}
 autoload -Uz add-zsh-hook 2>/dev/null
@@ -336,6 +340,8 @@ function __prezzy_prompt --on-event fish_prompt
     printf '\\033]133;A\\007'
 end
 function __prezzy_preexec --on-event fish_preexec
+    printf '\\033]133;E;%s\\007' $argv[1]
+    printf '\\033]133;W;%s\\007' $PWD
     printf '\\033]133;C\\007'
 end";
     cmd.args(["-C", init]);
@@ -380,6 +386,10 @@ if (Get-Module PSReadLine -ErrorAction SilentlyContinue) {
     Set-PSReadLineKeyHandler -Key Enter -ScriptBlock {
         $e = [char]0x1b
         $b = [char]7
+        $line = $null
+        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$null)
+        [Console]::Write("${e}]133;E;${line}${b}")
+        [Console]::Write("${e}]133;W;$($PWD.Path)${b}")
         [Console]::Write("${e}]133;C${b}")
         [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
     }

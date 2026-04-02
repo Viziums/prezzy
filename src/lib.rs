@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod config;
 pub mod detect;
+pub mod history;
 pub mod input;
 pub mod render;
 pub mod shell;

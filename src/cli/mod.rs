@@ -77,6 +77,41 @@ pub enum Command {
     /// your shell works. Programs using alternate screen (vim, htop, less)
     /// are passed through unmodified.
     Shell(ShellArgs),
+
+    /// Browse and query command history recorded during shell mode sessions.
+    History(HistoryArgs),
+}
+
+/// Arguments for `prezzy history`.
+#[derive(Debug, clap::Args)]
+pub struct HistoryArgs {
+    /// Show the N most frequently used commands.
+    #[arg(long, value_name = "N")]
+    pub top: Option<u32>,
+
+    /// Show commands that exited with a non-zero code.
+    #[arg(long)]
+    pub failed: bool,
+
+    /// Show the slowest commands.
+    #[arg(long)]
+    pub slow: bool,
+
+    /// Search commands by substring.
+    #[arg(long, value_name = "PATTERN")]
+    pub search: Option<String>,
+
+    /// Show aggregate statistics.
+    #[arg(long)]
+    pub stats: bool,
+
+    /// Delete all recorded history.
+    #[arg(long)]
+    pub clear: bool,
+
+    /// Maximum number of results to show.
+    #[arg(short = 'n', long, default_value = "25")]
+    pub limit: u32,
 }
 
 /// Arguments for `prezzy shell`.

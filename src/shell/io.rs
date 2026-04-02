@@ -22,6 +22,7 @@ use std::io::{self, Read, Write};
 use anyhow::{Context, Result};
 use portable_pty::MasterPty;
 
+use crate::history::{self, HistoryDb};
 use crate::render::LevelFilter;
 use crate::theme::Theme;
 
@@ -57,6 +58,8 @@ pub fn run(
     level_filter: Option<LevelFilter>,
     ascii: bool,
     passthrough: bool,
+    history: Option<&HistoryDb>,
+    session_id: &str,
 ) -> Result<Option<i32>> {
     let reader = master
         .try_clone_reader()
@@ -77,7 +80,7 @@ pub fn run(
     if passthrough {
         passthrough_loop(reader, master)
     } else {
-        output_loop(reader, master, theme, level_filter, ascii)
+        output_loop(reader, master, theme, level_filter, ascii, history, session_id)
     }
 }
 
@@ -120,6 +123,8 @@ fn output_loop(
     theme: &Theme,
     level_filter: Option<LevelFilter>,
     ascii: bool,
+    history: Option<&HistoryDb>,
+    session_id: &str,
 ) -> Result<Option<i32>> {
     let stdout = io::stdout();
     let mut stdout = io::BufWriter::new(stdout.lock());
@@ -130,6 +135,10 @@ fn output_loop(
 
     // Track terminal size so we can detect resizes and forward them to the PTY.
     let mut last_size = crossterm::terminal::size().unwrap_or((80, 24));
+
+    // History tracking: per-command metadata accumulated between C and D markers.
+    let hostname = history::hostname();
+    let mut cmd_start_ms: Option<i64> = None;
 
     loop {
         let n = match reader.read(&mut buf) {
@@ -164,6 +173,11 @@ fn output_loop(
 
         let is_cmd = state.command_state == CommandState::CommandRunning;
 
+        // Track command start for duration calculation.
+        if !was_cmd && is_cmd {
+            cmd_start_ms = Some(history::now_ms());
+        }
+
         // Process the chunk through the beautification pipeline.
         // Broken-pipe on stdout means the parent/terminal is gone — exit cleanly.
         if let Err(e) = process_chunk(
@@ -180,6 +194,35 @@ fn output_loop(
                 }
             }
             return Err(e);
+        }
+
+        // Record to history when a command finishes (was running, now idle).
+        if was_cmd && !is_cmd {
+            if let Some(db) = history {
+                let now = history::now_ms();
+                let duration = cmd_start_ms.map(|start| now - start);
+                let command_text = state.take_command_text();
+                let cwd = state.take_command_cwd();
+                let format = beautifier.take_detected_format();
+
+                if let Some(cmd) = command_text {
+                    if !history::should_skip(&cmd) {
+                        let record = history::CommandRecord {
+                            command: cmd,
+                            timestamp_ms: cmd_start_ms.unwrap_or(now),
+                            duration_ms: duration,
+                            exit_code: state.exit_code,
+                            cwd,
+                            format,
+                            session_id: session_id.to_owned(),
+                            hostname: hostname.clone(),
+                        };
+                        // Best-effort: don't fail the session if history write fails.
+                        let _ = db.insert(&record);
+                    }
+                }
+                cmd_start_ms = None;
+            }
         }
     }
 
