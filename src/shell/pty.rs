@@ -125,6 +125,10 @@ pub fn spawn_shell(
 /// instead of running the target binary, which avoids side effects (some shells
 /// source profile files even with `--help`).
 fn command_exists(name: &str) -> bool {
+    // Reject names with characters that could cause shell injection.
+    if name.contains('\'') || name.contains(';') || name.contains('&') || name.contains('|') {
+        return false;
+    }
     let (probe, args): (&str, &[&str]) = if cfg!(windows) {
         ("where.exe", &[name])
     } else {

@@ -58,6 +58,9 @@ fn glob_match(text: &str, pattern: &str) -> bool {
         if part.is_empty() {
             continue;
         }
+        if pos > text.len() {
+            return false;
+        }
         match text[pos..].find(part) {
             Some(idx) => pos += idx + part.len(),
             None => return false,
@@ -116,6 +119,28 @@ mod tests {
     #[test]
     fn glob_match_case_insensitive_via_caller() {
         // The caller lowercases both, so test that pathway.
-        assert!(should_skip("export MY_TOKEN=abc", &["*token*".into()],));
+        assert!(should_skip("export MY_TOKEN=abc", &["*token*".into()]));
+    }
+
+    #[test]
+    fn glob_match_short_text_long_pattern() {
+        // Pattern longer than text — must not panic.
+        assert!(!glob_match("ab", "abcdefghij*"));
+        assert!(!glob_match("x", "*very*long*pattern*"));
+        assert!(!glob_match("", "*a*"));
+    }
+
+    #[test]
+    fn glob_match_overlapping_parts() {
+        assert!(glob_match("aab", "*a*b"));
+        assert!(glob_match("aaab", "*a*a*b"));
+        assert!(!glob_match("ab", "*a*a*b"));
+    }
+
+    #[test]
+    fn glob_match_empty_text_and_pattern() {
+        assert!(glob_match("", ""));
+        assert!(glob_match("", "*"));
+        assert!(!glob_match("", "a"));
     }
 }

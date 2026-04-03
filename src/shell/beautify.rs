@@ -165,6 +165,10 @@ impl<'a> OutputBeautifier<'a> {
 
     /// Force-flush to passthrough because buffers exceeded limits.
     pub fn force_passthrough(&mut self, w: &mut impl Write) -> Result<()> {
+        // Record that we fell back to passthrough (no format detected or limit hit).
+        if self.detected_format.is_none() {
+            self.detected_format = Some(Format::Plain);
+        }
         if self.state == State::RenderingFull && !self.clean_lines.is_empty() {
             // RenderingFull doesn't keep raw bytes — flush clean lines as text.
             for line in &self.clean_lines {
@@ -188,6 +192,7 @@ impl<'a> OutputBeautifier<'a> {
     /// If no format is found, flushes raw bytes and switches to passthrough.
     pub fn detect_and_render(&mut self, w: &mut impl Write) -> Result<()> {
         let format = detect::detect_format(&self.clean_lines, None);
+        self.detected_format = Some(format);
 
         if matches!(format, Format::Plain) {
             // No interesting format — dump raw and switch to passthrough.
@@ -197,8 +202,6 @@ impl<'a> OutputBeautifier<'a> {
             self.state = State::Passthrough;
             return Ok(());
         }
-
-        self.detected_format = Some(format);
         let renderer = render::renderer_for(format);
 
         if renderer.wants_full_input() {
