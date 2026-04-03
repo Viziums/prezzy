@@ -112,6 +112,26 @@ pub fn spawn_shell(
     })
 }
 
+/// Check whether a command is reachable on PATH without executing it.
+///
+/// Uses the platform's native lookup (`where` on Windows, `command -v` on Unix)
+/// instead of running the target binary, which avoids side effects (some shells
+/// source profile files even with `--help`).
+fn command_exists(name: &str) -> bool {
+    let (probe, args): (&str, &[&str]) = if cfg!(windows) {
+        ("where.exe", &[name])
+    } else {
+        ("sh", &["-c", &format!("command -v '{name}'")])
+    };
+    std::process::Command::new(probe)
+        .args(args)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .stdin(std::process::Stdio::null())
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -182,24 +202,4 @@ mod tests {
     fn command_exists_rejects_nonexistent() {
         assert!(!command_exists("__prezzy_nonexistent_binary_12345__"));
     }
-}
-
-/// Check whether a command is reachable on PATH without executing it.
-///
-/// Uses the platform's native lookup (`where` on Windows, `command -v` on Unix)
-/// instead of running the target binary, which avoids side effects (some shells
-/// source profile files even with `--help`).
-fn command_exists(name: &str) -> bool {
-    let (probe, args): (&str, &[&str]) = if cfg!(windows) {
-        ("where.exe", &[name])
-    } else {
-        ("sh", &["-c", &format!("command -v '{name}'")])
-    };
-    std::process::Command::new(probe)
-        .args(args)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .stdin(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
 }

@@ -156,6 +156,91 @@ add-zsh-hook preexec __prezzy_preexec
     Ok(Some(path))
 }
 
+fn inject_fish(cmd: &mut CommandBuilder) -> Option<PathBuf> {
+    // fish accepts --init-command / -C for startup code — no temp file needed.
+    // fish event handlers naturally coexist, so no chaining is needed.
+    let init = "\
+function __prezzy_prompt --on-event fish_prompt
+    printf '\\033]133;D;%d\\007' $status
+    printf '\\033]133;A\\007'
+end
+function __prezzy_preexec --on-event fish_preexec
+    printf '\\033]133;E;%s\\007' $argv[1]
+    printf '\\033]133;W;%s\\007' $PWD
+    printf '\\033]133;C\\007'
+end";
+    cmd.args(["-C", init]);
+    None
+}
+
+fn inject_pwsh(cmd: &mut CommandBuilder) -> Result<Option<PathBuf>> {
+    // PowerShell integration: override prompt for D/A markers, use PSReadLine
+    // Enter key handler for C marker (command about to execute).
+    //
+    // Uses [char]0x1b for ESC — works in both Windows PowerShell 5.1 and pwsh 7+.
+    // The `e escape literal is pwsh 6+ only, so we avoid it.
+    //
+    // Sourced via -Command ". '<path>'" which bypasses execution policy
+    // (policy only restricts -File, not -Command).
+    let script = r#"# prezzy shell integration for PowerShell
+# Source the user's profile first (we launched with -NoProfile to control ordering).
+if ($PROFILE -and (Test-Path $PROFILE)) { . $PROFILE }
+
+# --- OSC 133 markers ---
+$__prezzy_esc = [char]0x1b
+$__prezzy_bel = [char]7
+
+# Save original prompt so we can chain it.
+$__prezzy_orig_prompt = $function:prompt
+
+function prompt {
+    $__ec = $global:LASTEXITCODE
+    if ($null -eq $__ec) { $__ec = 0 }
+    [Console]::Write("${__prezzy_esc}]133;D;${__ec}${__prezzy_bel}")
+    [Console]::Write("${__prezzy_esc}]133;A${__prezzy_bel}")
+    if ($__prezzy_orig_prompt) {
+        & $__prezzy_orig_prompt
+    } else {
+        "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) "
+    }
+}
+
+# Emit C marker when Enter is pressed (command about to execute).
+# PSReadLine is bundled with PowerShell 5.1+ and pwsh 7+.
+if (Get-Module PSReadLine -ErrorAction SilentlyContinue) {
+    Set-PSReadLineKeyHandler -Key Enter -ScriptBlock {
+        $e = [char]0x1b
+        $b = [char]7
+        $line = $null
+        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$null)
+        [Console]::Write("${e}]133;E;${line}${b}")
+        [Console]::Write("${e}]133;W;$($PWD.Path)${b}")
+        [Console]::Write("${e}]133;C${b}")
+        [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
+    }
+}
+"#;
+    let mut file = tempfile::Builder::new()
+        .prefix("prezzy-pwsh-")
+        .suffix(".ps1")
+        .tempfile()
+        .context("create temp PowerShell init script")?;
+    file.write_all(script.as_bytes())?;
+    let path = file.into_temp_path().keep().map_err(|e| e.error)?;
+
+    // -NoProfile: we source the profile ourselves to control ordering.
+    // -NoExit: keep the shell open after init script runs.
+    // -Command ". '<path>'": dot-source bypasses execution policy.
+    let safe_path = path.to_string_lossy().replace('\'', "''");
+    cmd.args([
+        "-NoProfile",
+        "-NoExit",
+        "-Command",
+        &format!(". '{safe_path}'"),
+    ]);
+    Ok(Some(path))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -329,89 +414,4 @@ mod tests {
 
         cleanup(Some(&path));
     }
-}
-
-fn inject_fish(cmd: &mut CommandBuilder) -> Option<PathBuf> {
-    // fish accepts --init-command / -C for startup code — no temp file needed.
-    // fish event handlers naturally coexist, so no chaining is needed.
-    let init = "\
-function __prezzy_prompt --on-event fish_prompt
-    printf '\\033]133;D;%d\\007' $status
-    printf '\\033]133;A\\007'
-end
-function __prezzy_preexec --on-event fish_preexec
-    printf '\\033]133;E;%s\\007' $argv[1]
-    printf '\\033]133;W;%s\\007' $PWD
-    printf '\\033]133;C\\007'
-end";
-    cmd.args(["-C", init]);
-    None
-}
-
-fn inject_pwsh(cmd: &mut CommandBuilder) -> Result<Option<PathBuf>> {
-    // PowerShell integration: override prompt for D/A markers, use PSReadLine
-    // Enter key handler for C marker (command about to execute).
-    //
-    // Uses [char]0x1b for ESC — works in both Windows PowerShell 5.1 and pwsh 7+.
-    // The `e escape literal is pwsh 6+ only, so we avoid it.
-    //
-    // Sourced via -Command ". '<path>'" which bypasses execution policy
-    // (policy only restricts -File, not -Command).
-    let script = r#"# prezzy shell integration for PowerShell
-# Source the user's profile first (we launched with -NoProfile to control ordering).
-if ($PROFILE -and (Test-Path $PROFILE)) { . $PROFILE }
-
-# --- OSC 133 markers ---
-$__prezzy_esc = [char]0x1b
-$__prezzy_bel = [char]7
-
-# Save original prompt so we can chain it.
-$__prezzy_orig_prompt = $function:prompt
-
-function prompt {
-    $__ec = $global:LASTEXITCODE
-    if ($null -eq $__ec) { $__ec = 0 }
-    [Console]::Write("${__prezzy_esc}]133;D;${__ec}${__prezzy_bel}")
-    [Console]::Write("${__prezzy_esc}]133;A${__prezzy_bel}")
-    if ($__prezzy_orig_prompt) {
-        & $__prezzy_orig_prompt
-    } else {
-        "PS $($executionContext.SessionState.Path.CurrentLocation)$('>' * ($nestedPromptLevel + 1)) "
-    }
-}
-
-# Emit C marker when Enter is pressed (command about to execute).
-# PSReadLine is bundled with PowerShell 5.1+ and pwsh 7+.
-if (Get-Module PSReadLine -ErrorAction SilentlyContinue) {
-    Set-PSReadLineKeyHandler -Key Enter -ScriptBlock {
-        $e = [char]0x1b
-        $b = [char]7
-        $line = $null
-        [Microsoft.PowerShell.PSConsoleReadLine]::GetBufferState([ref]$line, [ref]$null)
-        [Console]::Write("${e}]133;E;${line}${b}")
-        [Console]::Write("${e}]133;W;$($PWD.Path)${b}")
-        [Console]::Write("${e}]133;C${b}")
-        [Microsoft.PowerShell.PSConsoleReadLine]::AcceptLine()
-    }
-}
-"#;
-    let mut file = tempfile::Builder::new()
-        .prefix("prezzy-pwsh-")
-        .suffix(".ps1")
-        .tempfile()
-        .context("create temp PowerShell init script")?;
-    file.write_all(script.as_bytes())?;
-    let path = file.into_temp_path().keep().map_err(|e| e.error)?;
-
-    // -NoProfile: we source the profile ourselves to control ordering.
-    // -NoExit: keep the shell open after init script runs.
-    // -Command ". '<path>'": dot-source bypasses execution policy.
-    let safe_path = path.to_string_lossy().replace('\'', "''");
-    cmd.args([
-        "-NoProfile",
-        "-NoExit",
-        "-Command",
-        &format!(". '{safe_path}'"),
-    ]);
-    Ok(Some(path))
 }

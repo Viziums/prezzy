@@ -96,16 +96,16 @@ pub fn run(args: &ShellArgs) -> Result<()> {
     let raw_guard = io::RawModeGuard::enable()?;
 
     // Run I/O threads — blocks until the child shell exits.
-    let exit_code = io::run(
-        &*session.master,
-        &theme,
+    let io_cfg = io::IoConfig {
+        theme: &theme,
         level_filter,
         ascii,
-        args.passthrough,
-        history_db.as_ref(),
-        &session_id,
-        &exclude_patterns,
-    )?;
+        passthrough: args.passthrough,
+        history: history_db.as_ref(),
+        session_id: &session_id,
+        exclude_patterns: &exclude_patterns,
+    };
+    let exit_code = io::run(&*session.master, &io_cfg)?;
 
     // Restore terminal before printing anything.
     drop(raw_guard);

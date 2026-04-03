@@ -48,20 +48,22 @@ impl Drop for RawModeGuard {
     }
 }
 
+/// Configuration for the shell I/O loop.
+pub struct IoConfig<'a> {
+    pub theme: &'a Theme,
+    pub level_filter: Option<LevelFilter>,
+    pub ascii: bool,
+    pub passthrough: bool,
+    pub history: Option<&'a HistoryDb>,
+    pub session_id: &'a str,
+    pub exclude_patterns: &'a [String],
+}
+
 /// Spawn I/O threads and run the output processing loop.
 ///
 /// Returns the last exit code reported by the child shell (via OSC 133;D).
 /// In passthrough mode, skips VTE parsing and beautification entirely.
-pub fn run(
-    master: &dyn MasterPty,
-    theme: &Theme,
-    level_filter: Option<LevelFilter>,
-    ascii: bool,
-    passthrough: bool,
-    history: Option<&HistoryDb>,
-    session_id: &str,
-    exclude_patterns: &[String],
-) -> Result<Option<i32>> {
+pub fn run(master: &dyn MasterPty, cfg: &IoConfig<'_>) -> Result<Option<i32>> {
     let reader = master.try_clone_reader().context("clone PTY reader")?;
     let writer = master.take_writer().context("take PTY writer")?;
 
@@ -74,19 +76,10 @@ pub fn run(
 
     // Output loop runs on the current thread so we can borrow `theme`.
     // We also pass `master` so the loop can forward terminal resizes.
-    if passthrough {
+    if cfg.passthrough {
         passthrough_loop(reader, master)
     } else {
-        output_loop(
-            reader,
-            master,
-            theme,
-            level_filter,
-            ascii,
-            history,
-            session_id,
-            exclude_patterns,
-        )
+        output_loop(reader, master, cfg)
     }
 }
 
@@ -126,18 +119,13 @@ fn input_loop(mut writer: Box<dyn Write + Send>) -> Result<()> {
 fn output_loop(
     mut reader: Box<dyn Read + Send>,
     master: &dyn MasterPty,
-    theme: &Theme,
-    level_filter: Option<LevelFilter>,
-    ascii: bool,
-    history: Option<&HistoryDb>,
-    session_id: &str,
-    exclude_patterns: &[String],
+    cfg: &IoConfig<'_>,
 ) -> Result<Option<i32>> {
     let stdout = io::stdout();
     let mut stdout = io::BufWriter::new(stdout.lock());
     let mut vte_parser = vte::Parser::new();
     let mut state = ShellParser::new();
-    let mut beautifier = OutputBeautifier::new(theme, level_filter, ascii);
+    let mut beautifier = OutputBeautifier::new(cfg.theme, cfg.level_filter, cfg.ascii);
     let mut buf = [0u8; 8192];
 
     // Track terminal size so we can detect resizes and forward them to the PTY.
@@ -205,7 +193,7 @@ fn output_loop(
 
         // Record to history when a command finishes (was running, now idle).
         if was_cmd && !is_cmd {
-            if let Some(db) = history {
+            if let Some(db) = cfg.history {
                 let now = history::now_ms();
                 let duration = cmd_start_ms.map(|start| now - start);
                 let command_text = state.take_command_text();
@@ -213,7 +201,7 @@ fn output_loop(
                 let format = beautifier.take_detected_format();
 
                 if let Some(cmd) = command_text {
-                    if !history::should_skip(&cmd, exclude_patterns) {
+                    if !history::should_skip(&cmd, cfg.exclude_patterns) {
                         let record = history::CommandRecord {
                             command: cmd,
                             timestamp_ms: cmd_start_ms.unwrap_or(now),
@@ -221,7 +209,7 @@ fn output_loop(
                             exit_code: state.exit_code,
                             cwd,
                             format,
-                            session_id: session_id.to_owned(),
+                            session_id: cfg.session_id.to_owned(),
                             hostname: hostname.clone(),
                         };
                         // Best-effort: don't fail the session if history write fails.
@@ -392,7 +380,7 @@ mod tests {
     use crate::theme::Theme;
 
     /// Simulate the output loop by feeding chunks through the same
-    /// `process_chunk` function used in production. Returns (output_bytes, exit_code).
+    /// `process_chunk` function used in production. Returns `(output_bytes, exit_code)`.
     fn simulate(chunks: &[&[u8]]) -> (Vec<u8>, Option<i32>) {
         let theme = Theme::by_name("default");
         let mut vte_parser = vte::Parser::new();
@@ -543,7 +531,7 @@ mod tests {
         // Feed large chunks until overflow.
         for _ in 0..3 {
             let was_cmd = state.command_state == CommandState::CommandRunning;
-            for &byte in big.iter() {
+            for &byte in &big {
                 vte_parser.advance(&mut state, byte);
             }
             let is_cmd = state.command_state == CommandState::CommandRunning;

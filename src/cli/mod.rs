@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use clap::{CommandFactory, Parser, Subcommand, ValueEnum};
 use clap_complete::Shell;
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Parser, Debug)]
 #[command(
     name = "prezzy",
@@ -88,6 +89,7 @@ pub enum Command {
 }
 
 /// Arguments for `prezzy history`.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, clap::Args)]
 pub struct HistoryArgs {
     /// Show the N most frequently used commands.

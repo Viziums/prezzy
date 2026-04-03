@@ -236,6 +236,7 @@ fn print_record(r: &prezzy::history::CommandRecord) {
     }
     if let Some(ms) = r.duration_ms {
         if ms >= 1000 {
+            #[allow(clippy::cast_precision_loss)]
             write!(meta, " ({:.1}s)", ms as f64 / 1000.0).unwrap();
         } else {
             write!(meta, " ({ms}ms)").unwrap();

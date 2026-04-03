@@ -482,7 +482,7 @@ mod tests {
     fn over_limit_clean_lines() {
         let mut b = make_beautifier();
         b.start();
-        let lines: Vec<String> = (0..MAX_CLEAN_LINES + 1).map(|i| format!("{i}")).collect();
+        let lines: Vec<String> = (0..=MAX_CLEAN_LINES).map(|i| format!("{i}")).collect();
         b.feed_lines(lines);
         assert!(b.over_limit());
     }
@@ -528,7 +528,8 @@ mod tests {
         b.feed_lines(vec!["just one line".into()]);
 
         // Manually backdate the start time to simulate elapsed timeout.
-        b.buffering_start = Some(Instant::now() - DETECTION_TIMEOUT - Duration::from_millis(1));
+        b.buffering_start =
+            Instant::now().checked_sub(DETECTION_TIMEOUT + Duration::from_millis(1));
         assert!(b.should_detect());
     }
 
