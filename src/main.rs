@@ -10,6 +10,25 @@ use prezzy::theme;
 fn main() {
     let mut args = Args::parse();
 
+    // Subcommands — run before pipe-mode logic.
+    match args.command {
+        Some(prezzy::cli::Command::Shell(ref shell_args)) => {
+            if let Err(err) = prezzy::shell::run(shell_args) {
+                eprintln!("prezzy: {err:#}");
+                process::exit(1);
+            }
+            return;
+        }
+        Some(prezzy::cli::Command::History(ref history_args)) => {
+            if let Err(err) = run_history(history_args) {
+                eprintln!("prezzy: {err:#}");
+                process::exit(1);
+            }
+            return;
+        }
+        None => {}
+    }
+
     // Handle meta commands that don't process input.
     if let Some(shell) = args.completions {
         Args::print_completions(shell);
@@ -105,6 +124,170 @@ fn run_with_pager(mut args: Args) {
     }
 }
 
+fn run_history(args: &prezzy::cli::HistoryArgs) -> anyhow::Result<()> {
+    use prezzy::history::{self, HistoryDb};
+
+    let path = history::default_db_path()
+        .ok_or_else(|| anyhow::anyhow!("cannot determine data directory"))?;
+
+    if !path.exists() && !args.clear {
+        eprintln!("prezzy: no history yet — run `prezzy shell` first.");
+        return Ok(());
+    }
+
+    let db = HistoryDb::open(&path)?;
+
+    if args.clear {
+        let count = db.clear()?;
+        println!("Deleted {count} entries.");
+        return Ok(());
+    }
+
+    if args.stats {
+        let s = db.stats()?;
+        println!("Total commands:  {}", s.total_commands);
+        println!("Unique commands: {}", s.unique_commands);
+        println!("Failed commands: {}", s.failed_commands);
+        if let Some(avg) = s.avg_duration_ms {
+            println!("Avg duration:    {avg:.0}ms");
+        }
+        if s.total_commands > 0 {
+            #[allow(clippy::cast_precision_loss)]
+            let rate =
+                (s.total_commands - s.failed_commands) as f64 / s.total_commands as f64 * 100.0;
+            println!("Success rate:    {rate:.1}%");
+        }
+        return Ok(());
+    }
+
+    if let Some(n) = args.top {
+        let top = db.top(n)?;
+        if top.is_empty() {
+            println!("No history.");
+            return Ok(());
+        }
+        // Right-align the count column.
+        let max_count = top.iter().map(|(_, c)| *c).max().unwrap_or(0);
+        let count_width = format!("{max_count}").len();
+        for (cmd, count) in &top {
+            println!("{count:>count_width$}  {cmd}");
+        }
+        return Ok(());
+    }
+
+    let records = if args.failed {
+        db.failed(args.limit)?
+    } else if args.slow {
+        db.slowest(args.limit)?
+    } else if let Some(ref pattern) = args.search {
+        db.search(pattern, args.limit)?
+    } else if args.today {
+        let day_ago = history::now_ms() - 86_400_000;
+        db.since(day_ago, args.limit)?
+    } else if args.week {
+        let week_ago = history::now_ms() - 7 * 86_400_000;
+        db.since(week_ago, args.limit)?
+    } else if let Some(ref dir) = args.dir {
+        db.by_dir(dir, args.limit)?
+    } else {
+        db.recent(args.limit)?
+    };
+
+    if records.is_empty() {
+        println!("No matching commands.");
+        return Ok(());
+    }
+
+    if args.export {
+        println!("command,timestamp,duration_ms,exit_code,cwd,format");
+        for r in &records {
+            println!(
+                "{},{},{},{},{},{}",
+                csv_escape(&r.command),
+                r.timestamp_ms,
+                r.duration_ms.map_or(String::new(), |d| d.to_string()),
+                r.exit_code.map_or(String::new(), |c| c.to_string()),
+                csv_escape(r.cwd.as_deref().unwrap_or("")),
+                csv_escape(r.format.as_deref().unwrap_or("")),
+            );
+        }
+        return Ok(());
+    }
+
+    for record in &records {
+        print_record(record);
+    }
+
+    Ok(())
+}
+
+fn print_record(r: &prezzy::history::CommandRecord) {
+    use std::fmt::Write;
+
+    // Format timestamp as human-readable.
+    let secs = r.timestamp_ms / 1000;
+    let dt = chrono_lite(secs);
+
+    let mut meta = String::new();
+    if let Some(code) = r.exit_code {
+        if code != 0 {
+            write!(meta, " [exit {code}]").unwrap();
+        }
+    }
+    if let Some(ms) = r.duration_ms {
+        if ms >= 1000 {
+            #[allow(clippy::cast_precision_loss)]
+            write!(meta, " ({:.1}s)", ms as f64 / 1000.0).unwrap();
+        } else {
+            write!(meta, " ({ms}ms)").unwrap();
+        }
+    }
+    if let Some(ref cwd) = r.cwd {
+        write!(meta, " {cwd}").unwrap();
+    }
+
+    println!("{dt}  {}{meta}", r.command);
+}
+
+/// Minimal timestamp formatting without pulling in chrono.
+fn chrono_lite(epoch_secs: i64) -> String {
+    const SECS_PER_DAY: i64 = 86400;
+    const SECS_PER_HOUR: i64 = 3600;
+    const SECS_PER_MIN: i64 = 60;
+
+    let days = epoch_secs / SECS_PER_DAY;
+    let time_of_day = epoch_secs % SECS_PER_DAY;
+    let hours = time_of_day / SECS_PER_HOUR;
+    let minutes = (time_of_day % SECS_PER_HOUR) / SECS_PER_MIN;
+
+    // Days since epoch → year/month/day (simplified civil calendar).
+    let (y, m, d) = days_to_ymd(days + 719_468); // shift to 0000-03-01 epoch
+    format!("{y:04}-{m:02}-{d:02} {hours:02}:{minutes:02}")
+}
+
+/// Convert day count to (year, month, day). Algorithm from Howard Hinnant.
+const fn days_to_ymd(days: i64) -> (i64, i64, i64) {
+    let era = days.div_euclid(146_097);
+    let doe = days.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y, m, d)
+}
+
+/// Escape a field for CSV output: quote if it contains comma, quote, or newline.
+fn csv_escape(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_owned()
+    }
+}
+
 fn is_broken_pipe(err: &anyhow::Error) -> bool {
     for cause in err.chain() {
         if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
@@ -114,4 +297,52 @@ fn is_broken_pipe(err: &anyhow::Error) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chrono_lite_unix_epoch() {
+        assert_eq!(chrono_lite(0), "1970-01-01 00:00");
+    }
+
+    #[test]
+    fn chrono_lite_known_date() {
+        // 2024-01-15 10:30:00 UTC = 1705314600
+        assert_eq!(chrono_lite(1_705_314_600), "2024-01-15 10:30");
+    }
+
+    #[test]
+    fn chrono_lite_y2k() {
+        // 2000-01-01 00:00:00 UTC = 946684800
+        assert_eq!(chrono_lite(946_684_800), "2000-01-01 00:00");
+    }
+
+    #[test]
+    fn chrono_lite_2026() {
+        // 2026-04-03 12:00:00 UTC = 1775217600
+        assert_eq!(chrono_lite(1_775_217_600), "2026-04-03 12:00");
+    }
+
+    #[test]
+    fn csv_escape_plain() {
+        assert_eq!(csv_escape("hello"), "hello");
+    }
+
+    #[test]
+    fn csv_escape_comma() {
+        assert_eq!(csv_escape("a,b"), "\"a,b\"");
+    }
+
+    #[test]
+    fn csv_escape_quotes() {
+        assert_eq!(csv_escape(r#"say "hi""#), r#""say ""hi""""#);
+    }
+
+    #[test]
+    fn csv_escape_newline() {
+        assert_eq!(csv_escape("a\nb"), "\"a\nb\"");
+    }
 }

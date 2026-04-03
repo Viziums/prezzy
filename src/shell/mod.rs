@@ -1,0 +1,132 @@
+//! Shell mode: wrap the user's interactive shell in a PTY with automatic
+//! output beautification.
+//!
+//! Launch with `prezzy shell`. Every command's output is buffered, its format
+//! detected (JSON, diff, logs, …), and rendered with syntax highlighting —
+//! transparently, without changing how the shell works.
+//!
+//! Programs that use the alternate screen (vim, htop, less) are passed
+//! through completely unmodified.
+
+mod beautify;
+mod inject;
+mod io;
+mod parser;
+mod pty;
+
+use anyhow::{Result, bail};
+
+use crate::cli::ShellArgs;
+use crate::config::Config;
+use crate::history;
+use crate::render::LevelFilter;
+use crate::theme::Theme;
+
+/// Entry point for `prezzy shell`.
+pub fn run(args: &ShellArgs) -> Result<()> {
+    // Guard against nested sessions.
+    if std::env::var_os("PREZZY_SHELL").is_some() {
+        bail!(
+            "already inside a prezzy shell session (PREZZY_SHELL is set)\n\
+             Tip: run `exit` first, or unset PREZZY_SHELL to override."
+        );
+    }
+
+    // Install a panic hook that restores the terminal before printing the
+    // panic message. Without this, a panic leaves the terminal in raw mode.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = crossterm::terminal::disable_raw_mode();
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+        default_hook(info);
+    }));
+
+    // Resolve configuration (CLI args > config file > defaults).
+    let config = Config::load();
+    let theme_name = resolve_theme(&args.theme, &config);
+    let theme = Theme::by_name(&theme_name);
+    let level_filter = args.level.as_deref().and_then(LevelFilter::parse);
+    let ascii = args.ascii || config.ascii.unwrap_or(false);
+    let exclude_patterns = config
+        .history
+        .as_ref()
+        .map_or_else(Vec::new, |h| h.exclude.clone());
+
+    // Detect shell and terminal size.
+    let shell_path = pty::detect_shell();
+    let shell_name = pty::shell_basename(&shell_path);
+    let (cols, rows) = crossterm::terminal::size().unwrap_or((80, 24));
+
+    if args.passthrough {
+        eprintln!("prezzy: launching {shell_name} in passthrough mode");
+    } else if inject::is_supported(&shell_name) {
+        eprintln!("prezzy: launching {shell_name} in shell mode (beautification active)");
+    } else {
+        eprintln!(
+            "prezzy: launching {shell_name} (unsupported shell — output will pass through without beautification)\n\
+             Tip: supported shells are {}.",
+            inject::SUPPORTED_SHELLS
+                .iter()
+                .filter(|&&s| s != "powershell") // "pwsh" covers both
+                .copied()
+                .collect::<Vec<_>>()
+                .join(", "),
+        );
+    }
+
+    // Open history database (best-effort — don't fail shell mode if DB is broken).
+    let session_id = history::session_id();
+    let history_db = if history::is_disabled() || args.passthrough {
+        None
+    } else {
+        history::default_db_path().and_then(|path| {
+            history::HistoryDb::open(&path)
+                .map_err(|e| {
+                    eprintln!("prezzy: history disabled (cannot open database: {e})");
+                    e
+                })
+                .ok()
+        })
+    };
+
+    // Spawn child shell in a PTY. PtySession cleans up temp files on drop.
+    let mut session = pty::spawn_shell(&shell_path, &shell_name, cols, rows, args.passthrough)?;
+
+    // Put the outer terminal into raw mode so keystrokes pass through.
+    let raw_guard = io::RawModeGuard::enable()?;
+
+    // Run I/O threads — blocks until the child shell exits.
+    let io_cfg = io::IoConfig {
+        theme: &theme,
+        level_filter,
+        ascii,
+        passthrough: args.passthrough,
+        history: history_db.as_ref(),
+        session_id: &session_id,
+        exclude_patterns: &exclude_patterns,
+    };
+    let exit_code = io::run(&*session.master, &io_cfg)?;
+
+    // Restore terminal before printing anything.
+    drop(raw_guard);
+
+    // Remove our custom panic hook — no longer needed after raw mode is off.
+    // This prevents hook accumulation if run() is ever called in non-exit contexts.
+    let _ = std::panic::take_hook();
+
+    // Reap the child process.
+    let _ = session.child.wait();
+
+    // PtySession drop cleans up temp init scripts.
+    drop(session);
+
+    // Exit with the shell's last reported exit code.
+    std::process::exit(exit_code.unwrap_or(0));
+}
+
+fn resolve_theme(cli_theme: &str, config: &Config) -> String {
+    if cli_theme != "default" {
+        return cli_theme.to_owned();
+    }
+    config.theme.clone().unwrap_or_else(|| "default".to_owned())
+}

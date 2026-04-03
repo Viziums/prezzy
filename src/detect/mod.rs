@@ -129,6 +129,7 @@ const fn override_to_format(o: FormatOverride) -> Format {
         FormatOverride::Log => Format::Log,
         FormatOverride::Diff => Format::Diff,
         FormatOverride::Markdown => Format::Markdown,
+        FormatOverride::StackTrace => Format::StackTrace,
         FormatOverride::KeyValue => Format::KeyValue,
         FormatOverride::Table => Format::Table,
         FormatOverride::Plain => Format::Plain,

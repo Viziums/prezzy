@@ -34,7 +34,8 @@ impl Renderer for CsvRenderer {
     }
 
     fn render_all(&self, input: &str, writer: &mut dyn Write, ctx: &RenderContext) -> Result<()> {
-        let rows = parse_rows(input, self.delimiter);
+        let delim = detect_delimiter(input, self.delimiter);
+        let rows = parse_rows(input, delim);
         if rows.is_empty() {
             return Ok(());
         }
@@ -202,6 +203,60 @@ fn write_border(
         write!(writer, "{s}")?;
     }
     Ok(())
+}
+
+/// Auto-detect the actual delimiter from input.
+///
+/// If the default delimiter produces single-column rows, try semicolons and
+/// pipes as alternatives. Returns whichever delimiter yields the most columns
+/// consistently.
+fn detect_delimiter(input: &str, default: char) -> char {
+    if default == '\t' {
+        return '\t'; // TSV is unambiguous.
+    }
+
+    let candidates = [default, ';', '|'];
+    let mut best = default;
+    let mut best_score = 0usize;
+
+    for &delim in &candidates {
+        let mut total_cols = 0usize;
+        let mut consistent = 0usize;
+        let mut first_count = None;
+        let mut lines_checked = 0usize;
+
+        for line in input.lines().take(10) {
+            if line.trim().is_empty() {
+                continue;
+            }
+            let count = parse_csv_line(line, delim).len();
+            total_cols += count;
+            lines_checked += 1;
+            match first_count {
+                None => first_count = Some(count),
+                Some(fc) if fc == count => consistent += 1,
+                _ => {}
+            }
+        }
+
+        if lines_checked < 2 {
+            continue;
+        }
+
+        // Score: prefer more columns with consistent counts.
+        let score = if consistent + 1 == lines_checked {
+            total_cols // All lines consistent.
+        } else {
+            0
+        };
+
+        if score > best_score {
+            best_score = score;
+            best = delim;
+        }
+    }
+
+    best
 }
 
 /// Parse CSV input into rows of cells, handling quoted fields.
