@@ -38,7 +38,7 @@ pub fn run(args: &Args) -> Result<()> {
 /// line through that renderer, flushing after each line for real-time output.
 /// When reading a file, polls for new content like `tail -f`.
 fn run_watch(args: &Args, terminal: &TerminalContext, theme: &Theme) -> Result<()> {
-    use std::io::{self, BufRead, BufReader, Write};
+    use std::io::{self, BufRead, BufReader, Seek, Write};
 
     let level_filter = args.level.as_deref().and_then(render::LevelFilter::parse);
     let ctx = render::RenderContext {
@@ -51,8 +51,16 @@ fn run_watch(args: &Args, terminal: &TerminalContext, theme: &Theme) -> Result<(
     let is_file = args.file.is_some();
     let reader: Box<dyn io::Read> = match &args.file {
         Some(path) => {
-            let file = std::fs::File::open(path)
+            let mut file = std::fs::File::open(path)
                 .with_context(|| format!("cannot open {}", path.display()))?;
+            // Seek to end for tail-f behavior: only show new content.
+            // If the file is small enough for detection, seek back.
+            let size = file.seek(io::SeekFrom::End(0)).unwrap_or(0);
+            if size > 0 {
+                // Seek back up to 8 KiB for initial format detection.
+                let rewind = i64::try_from(size.min(8192)).unwrap_or(i64::MAX);
+                let _ = file.seek(io::SeekFrom::End(-rewind));
+            }
             Box::new(file)
         }
         None => Box::new(io::stdin()),

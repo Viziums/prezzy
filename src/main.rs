@@ -202,13 +202,13 @@ fn run_history(args: &prezzy::cli::HistoryArgs) -> anyhow::Result<()> {
         println!("command,timestamp,duration_ms,exit_code,cwd,format");
         for r in &records {
             println!(
-                "\"{}\",{},{},{},{},{}",
-                r.command.replace('"', "\"\""),
+                "{},{},{},{},{},{}",
+                csv_escape(&r.command),
                 r.timestamp_ms,
                 r.duration_ms.map_or(String::new(), |d| d.to_string()),
                 r.exit_code.map_or(String::new(), |c| c.to_string()),
-                r.cwd.as_deref().unwrap_or(""),
-                r.format.as_deref().unwrap_or(""),
+                csv_escape(r.cwd.as_deref().unwrap_or("")),
+                csv_escape(r.format.as_deref().unwrap_or("")),
             );
         }
         return Ok(());
@@ -288,6 +288,15 @@ const fn days_to_ymd(days: i64) -> (i64, i64, i64) {
     (y, m, d)
 }
 
+/// Escape a field for CSV output: quote if it contains comma, quote, or newline.
+fn csv_escape(s: &str) -> String {
+    if s.contains(',') || s.contains('"') || s.contains('\n') {
+        format!("\"{}\"", s.replace('"', "\"\""))
+    } else {
+        s.to_owned()
+    }
+}
+
 fn is_broken_pipe(err: &anyhow::Error) -> bool {
     for cause in err.chain() {
         if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
@@ -297,4 +306,52 @@ fn is_broken_pipe(err: &anyhow::Error) -> bool {
         }
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn chrono_lite_unix_epoch() {
+        assert_eq!(chrono_lite(0), "1970-01-01 00:00");
+    }
+
+    #[test]
+    fn chrono_lite_known_date() {
+        // 2024-01-15 10:30:00 UTC = 1705314600
+        assert_eq!(chrono_lite(1_705_314_600), "2024-01-15 10:30");
+    }
+
+    #[test]
+    fn chrono_lite_y2k() {
+        // 2000-01-01 00:00:00 UTC = 946684800
+        assert_eq!(chrono_lite(946_684_800), "2000-01-01 00:00");
+    }
+
+    #[test]
+    fn chrono_lite_2026() {
+        // 2026-04-03 12:00:00 UTC = 1775217600
+        assert_eq!(chrono_lite(1_775_217_600), "2026-04-03 12:00");
+    }
+
+    #[test]
+    fn csv_escape_plain() {
+        assert_eq!(csv_escape("hello"), "hello");
+    }
+
+    #[test]
+    fn csv_escape_comma() {
+        assert_eq!(csv_escape("a,b"), "\"a,b\"");
+    }
+
+    #[test]
+    fn csv_escape_quotes() {
+        assert_eq!(csv_escape(r#"say "hi""#), r#""say ""hi""""#);
+    }
+
+    #[test]
+    fn csv_escape_newline() {
+        assert_eq!(csv_escape("a\nb"), "\"a\nb\"");
+    }
 }
