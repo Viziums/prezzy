@@ -251,15 +251,6 @@ fn print_record(r: &prezzy::history::CommandRecord) {
 
 /// Minimal timestamp formatting without pulling in chrono.
 fn chrono_lite(epoch_secs: i64) -> String {
-    // Use platform time formatting. On failure, return raw epoch.
-    #[cfg(unix)]
-    {
-        // strftime via libc is unsafe, just do simple math.
-        let _ = epoch_secs;
-    }
-
-    // Simple approach: format as "YYYY-MM-DD HH:MM" using basic math.
-    // This is UTC, which is fine for a CLI tool.
     const SECS_PER_DAY: i64 = 86400;
     const SECS_PER_HOUR: i64 = 3600;
     const SECS_PER_MIN: i64 = 60;

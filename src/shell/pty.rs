@@ -29,12 +29,19 @@ pub fn detect_shell() -> String {
 }
 
 /// Extract the shell name from a full path (e.g. `/usr/bin/zsh` → `zsh`).
+///
+/// Handles both `/` and `\` separators on all platforms so that Windows-style
+/// paths work correctly when tested on Linux CI.
 pub fn shell_basename(path: &str) -> String {
-    std::path::Path::new(path)
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("sh")
-        .to_lowercase()
+    let name = path
+        .rsplit(['/', '\\'])
+        .find(|s| !s.is_empty())
+        .unwrap_or("sh");
+    // Strip extension (e.g. "cmd.exe" → "cmd").
+    match name.rsplit_once('.') {
+        Some((stem, _)) if !stem.is_empty() => stem.to_lowercase(),
+        _ => name.to_lowercase(),
+    }
 }
 
 /// Everything needed to manage the PTY session lifetime.
