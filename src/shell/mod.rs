@@ -47,6 +47,10 @@ pub fn run(args: &ShellArgs) -> Result<()> {
     let theme = Theme::by_name(&theme_name);
     let level_filter = args.level.as_deref().and_then(LevelFilter::parse);
     let ascii = args.ascii || config.ascii.unwrap_or(false);
+    let exclude_patterns = config
+        .history
+        .as_ref()
+        .map_or_else(Vec::new, |h| h.exclude.clone());
 
     // Detect shell and terminal size.
     let shell_path = pty::detect_shell();
@@ -101,6 +105,7 @@ pub fn run(args: &ShellArgs) -> Result<()> {
         args.passthrough,
         history_db.as_ref(),
         &session_id,
+        &exclude_patterns,
     )?;
 
     // Restore terminal before printing anything.

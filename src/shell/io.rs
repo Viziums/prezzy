@@ -60,6 +60,7 @@ pub fn run(
     passthrough: bool,
     history: Option<&HistoryDb>,
     session_id: &str,
+    exclude_patterns: &[String],
 ) -> Result<Option<i32>> {
     let reader = master
         .try_clone_reader()
@@ -80,7 +81,7 @@ pub fn run(
     if passthrough {
         passthrough_loop(reader, master)
     } else {
-        output_loop(reader, master, theme, level_filter, ascii, history, session_id)
+        output_loop(reader, master, theme, level_filter, ascii, history, session_id, exclude_patterns)
     }
 }
 
@@ -125,6 +126,7 @@ fn output_loop(
     ascii: bool,
     history: Option<&HistoryDb>,
     session_id: &str,
+    exclude_patterns: &[String],
 ) -> Result<Option<i32>> {
     let stdout = io::stdout();
     let mut stdout = io::BufWriter::new(stdout.lock());
@@ -206,7 +208,7 @@ fn output_loop(
                 let format = beautifier.take_detected_format();
 
                 if let Some(cmd) = command_text {
-                    if !history::should_skip(&cmd) {
+                    if !history::should_skip(&cmd, exclude_patterns) {
                         let record = history::CommandRecord {
                             command: cmd,
                             timestamp_ms: cmd_start_ms.unwrap_or(now),

@@ -123,6 +123,32 @@ impl HistoryDb {
         self.collect_rows(&mut stmt, params![like, limit])
     }
 
+    /// Commands since a given timestamp (epoch ms), newest first.
+    pub fn since(&self, since_ms: i64, limit: u32) -> Result<Vec<CommandRecord>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT command, timestamp_ms, duration_ms, exit_code, cwd, format, session_id, hostname
+             FROM commands WHERE timestamp_ms >= ?1
+             ORDER BY timestamp_ms DESC LIMIT ?2",
+        )?;
+        self.collect_rows(&mut stmt, params![since_ms, limit])
+    }
+
+    /// Commands run in a specific directory (prefix match), newest first.
+    ///
+    /// Tries both the given path and an alternate form to handle MSYS/Cygwin
+    /// path translation (e.g. `/c/Users` vs `C:/Users`).
+    pub fn by_dir(&self, dir: &str, limit: u32) -> Result<Vec<CommandRecord>> {
+        let alt = alternate_path_form(dir);
+        let like1 = format!("{dir}%");
+        let like2 = format!("{alt}%");
+        let mut stmt = self.conn.prepare(
+            "SELECT command, timestamp_ms, duration_ms, exit_code, cwd, format, session_id, hostname
+             FROM commands WHERE cwd LIKE ?1 OR cwd LIKE ?2
+             ORDER BY timestamp_ms DESC LIMIT ?3",
+        )?;
+        self.collect_rows(&mut stmt, params![like1, like2, limit])
+    }
+
     /// Slowest commands.
     pub fn slowest(&self, limit: u32) -> Result<Vec<CommandRecord>> {
         let mut stmt = self.conn.prepare(
@@ -236,6 +262,29 @@ pub struct HistoryStats {
 /// or `%APPDATA%/prezzy/history.db` (Windows).
 pub fn default_db_path() -> Option<PathBuf> {
     dirs::data_dir().map(|d| d.join("prezzy").join("history.db"))
+}
+
+/// Convert between MSYS (`/c/Users`) and Windows (`C:/Users`) path forms.
+///
+/// If the path looks like `/x/...`, returns `X:/...`. If it looks like `X:/...`,
+/// returns `/x/...`. Otherwise returns the input unchanged.
+fn alternate_path_form(path: &str) -> String {
+    let bytes = path.as_bytes();
+    // MSYS → Windows: /c/Users → C:/Users
+    if bytes.len() >= 2 && bytes[0] == b'/' && bytes[1].is_ascii_alphabetic() {
+        let drive = bytes[1].to_ascii_uppercase() as char;
+        return format!("{drive}:{}", &path[2..]);
+    }
+    // Windows → MSYS: C:/Users → /c/Users
+    if bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && (bytes[2] == b'/' || bytes[2] == b'\\')
+    {
+        let drive = bytes[0].to_ascii_lowercase() as char;
+        return format!("/{drive}{}", &path[2..]);
+    }
+    path.to_owned()
 }
 
 /// Current Unix epoch in milliseconds.
@@ -371,6 +420,39 @@ mod tests {
 
         let rows = db.slowest(10).unwrap();
         assert_eq!(rows[0].command, "slow");
+    }
+
+    #[test]
+    fn by_dir_prefix_match() {
+        let db = HistoryDb::open_in_memory().unwrap();
+        let mut r1 = test_record("ls");
+        r1.cwd = Some("/home/user/project".into());
+        let mut r2 = test_record("pwd");
+        r2.cwd = Some("/tmp".into());
+        db.insert(&r1).unwrap();
+        db.insert(&r2).unwrap();
+
+        let rows = db.by_dir("/home", 10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].command, "ls");
+
+        let rows = db.by_dir("/", 10).unwrap();
+        assert_eq!(rows.len(), 2);
+    }
+
+    #[test]
+    fn since_filter() {
+        let db = HistoryDb::open_in_memory().unwrap();
+        let mut old = test_record("old");
+        old.timestamp_ms = 1000;
+        let mut recent = test_record("recent");
+        recent.timestamp_ms = 99_000;
+        db.insert(&old).unwrap();
+        db.insert(&recent).unwrap();
+
+        let rows = db.since(50_000, 10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].command, "recent");
     }
 
     #[test]

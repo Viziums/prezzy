@@ -140,9 +140,29 @@ impl<'a> RenderEngine<'a> {
             renderer.render_all(&all, &mut stdout, &ctx)?;
             writeln!(stdout)?;
         } else {
+            let mut prev_line: Option<String> = None;
+            let mut repeat_count: u64 = 0;
+
             while let Some(line) = input.next_line()? {
+                if prev_line.as_ref() == Some(&line) {
+                    repeat_count += 1;
+                    continue;
+                }
+
+                // Flush the repeat summary for the previous line.
+                if repeat_count > 0 {
+                    flush_repeat_summary(repeat_count, &mut stdout, &ctx)?;
+                    repeat_count = 0;
+                }
+
                 renderer.render_line(&line, &mut stdout, &ctx)?;
                 writeln!(stdout)?;
+                prev_line = Some(line);
+            }
+
+            // Final flush if the input ended on a repeated line.
+            if repeat_count > 0 {
+                flush_repeat_summary(repeat_count, &mut stdout, &ctx)?;
             }
         }
 
@@ -153,6 +173,29 @@ impl<'a> RenderEngine<'a> {
     fn renderer_for(format: Format) -> Box<dyn Renderer> {
         renderer_for(format)
     }
+}
+
+/// Write a dim "... (repeated N times)" summary line.
+fn flush_repeat_summary(
+    count: u64,
+    writer: &mut dyn Write,
+    ctx: &RenderContext<'_>,
+) -> Result<()> {
+    use crossterm::style::{Color, Stylize};
+
+    let msg = if count == 1 {
+        "... (repeated 1 time)".to_owned()
+    } else {
+        format!("... (repeated {count} times)")
+    };
+
+    if ctx.terminal.color_enabled {
+        write!(writer, "{}", msg.with(Color::DarkGrey))?;
+    } else {
+        write!(writer, "{msg}")?;
+    }
+    writeln!(writer)?;
+    Ok(())
 }
 
 /// Create the appropriate renderer for a detected format.

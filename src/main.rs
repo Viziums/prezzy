@@ -182,12 +182,36 @@ fn run_history(args: &prezzy::cli::HistoryArgs) -> anyhow::Result<()> {
         db.slowest(args.limit)?
     } else if let Some(ref pattern) = args.search {
         db.search(pattern, args.limit)?
+    } else if args.today {
+        let day_ago = history::now_ms() - 86_400_000;
+        db.since(day_ago, args.limit)?
+    } else if args.week {
+        let week_ago = history::now_ms() - 7 * 86_400_000;
+        db.since(week_ago, args.limit)?
+    } else if let Some(ref dir) = args.dir {
+        db.by_dir(dir, args.limit)?
     } else {
         db.recent(args.limit)?
     };
 
     if records.is_empty() {
         println!("No matching commands.");
+        return Ok(());
+    }
+
+    if args.export {
+        println!("command,timestamp,duration_ms,exit_code,cwd,format");
+        for r in &records {
+            println!(
+                "\"{}\",{},{},{},{},{}",
+                r.command.replace('"', "\"\""),
+                r.timestamp_ms,
+                r.duration_ms.map_or(String::new(), |d| d.to_string()),
+                r.exit_code.map_or(String::new(), |c| c.to_string()),
+                r.cwd.as_deref().unwrap_or(""),
+                r.format.as_deref().unwrap_or(""),
+            );
+        }
         return Ok(());
     }
 

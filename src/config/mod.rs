@@ -19,6 +19,17 @@ pub struct Config {
     pub format: Option<String>,
     /// Default log level filter.
     pub level: Option<String>,
+    /// History settings.
+    pub history: Option<HistoryConfig>,
+}
+
+/// Configuration for command history recording.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct HistoryConfig {
+    /// Glob patterns for commands to exclude from history.
+    /// Example: `["*password*", "*token*", "*secret*"]`
+    pub exclude: Vec<String>,
 }
 
 impl Config {

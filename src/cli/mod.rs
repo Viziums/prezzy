@@ -50,6 +50,11 @@ pub struct Args {
     #[arg(long, env = "PREZZY_ASCII", value_parser = parse_bool_env, num_args = 0, default_missing_value = "true")]
     pub ascii: bool,
 
+    /// Watch mode: continuously read and beautify like `tail -f`.
+    /// Works with both files and stdin. Flushes output after each line.
+    #[arg(short = 'W', long)]
+    pub watch: bool,
+
     /// Pipe output through a pager (less).
     #[arg(long)]
     pub pager: bool,
@@ -101,9 +106,25 @@ pub struct HistoryArgs {
     #[arg(long, value_name = "PATTERN")]
     pub search: Option<String>,
 
+    /// Show only commands from today.
+    #[arg(long)]
+    pub today: bool,
+
+    /// Show only commands from the last 7 days.
+    #[arg(long)]
+    pub week: bool,
+
+    /// Filter by working directory.
+    #[arg(long, value_name = "PATH")]
+    pub dir: Option<String>,
+
     /// Show aggregate statistics.
     #[arg(long)]
     pub stats: bool,
+
+    /// Export results as CSV.
+    #[arg(long)]
+    pub export: bool,
 
     /// Delete all recorded history.
     #[arg(long)]
@@ -188,6 +209,8 @@ pub enum FormatOverride {
     Log,
     Diff,
     Markdown,
+    #[value(name = "stacktrace")]
+    StackTrace,
     #[value(name = "kv")]
     KeyValue,
     Table,
