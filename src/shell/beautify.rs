@@ -138,10 +138,7 @@ impl<'a> OutputBeautifier<'a> {
 
     /// Feed clean text lines extracted by the VTE parser.
     pub fn feed_lines(&mut self, lines: Vec<String>) {
-        if matches!(
-            self.state,
-            State::Buffering | State::RenderingFull
-        ) {
+        if matches!(self.state, State::Buffering | State::RenderingFull) {
             self.clean_lines.extend(lines);
         }
     }
@@ -314,7 +311,9 @@ impl<'a> OutputBeautifier<'a> {
 
     /// Take the detected format name (consumed on read).
     pub fn take_detected_format(&mut self) -> Option<String> {
-        self.detected_format.take().map(|f| format!("{f:?}").to_lowercase())
+        self.detected_format
+            .take()
+            .map(|f| format!("{f:?}").to_lowercase())
     }
 
     // -- internal -------------------------------------------------------------
@@ -444,8 +443,8 @@ mod tests {
 
         // Feed valid JSON lines — format detection should pick up JSON.
         let json_str = r#"{"name": "prezzy", "version": "0.1.0"}"#;
-        let lines: Vec<String> = std::iter::repeat_n(json_str.to_owned(), DETECTION_BUFFER_SIZE)
-            .collect();
+        let lines: Vec<String> =
+            std::iter::repeat_n(json_str.to_owned(), DETECTION_BUFFER_SIZE).collect();
         let raw = lines.join("\n").into_bytes();
         b.feed_raw(&raw);
         b.feed_lines(lines);

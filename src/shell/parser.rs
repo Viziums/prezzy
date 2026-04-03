@@ -78,12 +78,12 @@ impl ShellParser {
     }
 
     /// Take the command text reported by the E marker, if any.
-    pub fn take_command_text(&mut self) -> Option<String> {
+    pub const fn take_command_text(&mut self) -> Option<String> {
         self.command_text.take()
     }
 
     /// Take the working directory reported by the W marker, if any.
-    pub fn take_command_cwd(&mut self) -> Option<String> {
+    pub const fn take_command_cwd(&mut self) -> Option<String> {
         self.command_cwd.take()
     }
 

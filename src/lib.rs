@@ -63,25 +63,24 @@ fn run_watch(args: &Args, terminal: &TerminalContext, theme: &Theme) -> Result<(
     let mut line_buf = String::new();
 
     // Read a single line, returning Ok(true) if a line was read, Ok(false) on EOF.
-    let read_line = |reader: &mut BufReader<Box<dyn io::Read>>,
-                          buf: &mut String|
-     -> io::Result<bool> {
-        buf.clear();
-        match reader.read_line(buf) {
-            Ok(0) => Ok(false),
-            Ok(_) => {
-                // Strip trailing newline.
-                if buf.ends_with('\n') {
-                    buf.pop();
-                    if buf.ends_with('\r') {
+    let read_line =
+        |reader: &mut BufReader<Box<dyn io::Read>>, buf: &mut String| -> io::Result<bool> {
+            buf.clear();
+            match reader.read_line(buf) {
+                Ok(0) => Ok(false),
+                Ok(_) => {
+                    // Strip trailing newline.
+                    if buf.ends_with('\n') {
                         buf.pop();
+                        if buf.ends_with('\r') {
+                            buf.pop();
+                        }
                     }
+                    Ok(true)
                 }
-                Ok(true)
+                Err(e) => Err(e),
             }
-            Err(e) => Err(e),
-        }
-    };
+        };
 
     // Buffer initial lines for detection.
     let mut detection_lines: Vec<String> = Vec::new();

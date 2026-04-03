@@ -194,7 +194,9 @@ fn parse_bool_env(s: &str) -> Result<bool, String> {
     match s.to_lowercase().as_str() {
         "true" | "1" | "yes" => Ok(true),
         "false" | "0" | "no" | "" => Ok(false),
-        other => Err(format!("invalid boolean value '{other}', expected true/false/1/0/yes/no")),
+        other => Err(format!(
+            "invalid boolean value '{other}', expected true/false/1/0/yes/no"
+        )),
     }
 }
 

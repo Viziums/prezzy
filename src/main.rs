@@ -153,9 +153,8 @@ fn run_history(args: &prezzy::cli::HistoryArgs) -> anyhow::Result<()> {
         }
         if s.total_commands > 0 {
             #[allow(clippy::cast_precision_loss)]
-            let rate = (s.total_commands - s.failed_commands) as f64
-                / s.total_commands as f64
-                * 100.0;
+            let rate =
+                (s.total_commands - s.failed_commands) as f64 / s.total_commands as f64 * 100.0;
             println!("Success rate:    {rate:.1}%");
         }
         return Ok(());
@@ -275,7 +274,7 @@ fn chrono_lite(epoch_secs: i64) -> String {
 }
 
 /// Convert day count to (year, month, day). Algorithm from Howard Hinnant.
-fn days_to_ymd(days: i64) -> (i64, i64, i64) {
+const fn days_to_ymd(days: i64) -> (i64, i64, i64) {
     let era = days.div_euclid(146_097);
     let doe = days.rem_euclid(146_097);
     let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;

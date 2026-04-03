@@ -90,8 +90,7 @@ pub fn run(args: &ShellArgs) -> Result<()> {
     };
 
     // Spawn child shell in a PTY. PtySession cleans up temp files on drop.
-    let mut session =
-        pty::spawn_shell(&shell_path, &shell_name, cols, rows, args.passthrough)?;
+    let mut session = pty::spawn_shell(&shell_path, &shell_name, cols, rows, args.passthrough)?;
 
     // Put the outer terminal into raw mode so keystrokes pass through.
     let raw_guard = io::RawModeGuard::enable()?;
@@ -129,8 +128,5 @@ fn resolve_theme(cli_theme: &str, config: &Config) -> String {
     if cli_theme != "default" {
         return cli_theme.to_owned();
     }
-    config
-        .theme
-        .clone()
-        .unwrap_or_else(|| "default".to_owned())
+    config.theme.clone().unwrap_or_else(|| "default".to_owned())
 }

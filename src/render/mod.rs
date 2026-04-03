@@ -176,11 +176,7 @@ impl<'a> RenderEngine<'a> {
 }
 
 /// Write a dim "... (repeated N times)" summary line.
-fn flush_repeat_summary(
-    count: u64,
-    writer: &mut dyn Write,
-    ctx: &RenderContext<'_>,
-) -> Result<()> {
+fn flush_repeat_summary(count: u64, writer: &mut dyn Write, ctx: &RenderContext<'_>) -> Result<()> {
     use crossterm::style::{Color, Stylize};
 
     let msg = if count == 1 {

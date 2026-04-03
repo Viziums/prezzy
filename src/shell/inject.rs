@@ -21,7 +21,7 @@ pub const SUPPORTED_SHELLS: &[&str] = &["bash", "zsh", "fish", "pwsh", "powershe
 
 /// Returns `true` if the given shell name has OSC 133 integration support.
 pub fn is_supported(shell_name: &str) -> bool {
-    SUPPORTED_SHELLS.iter().any(|&s| s == shell_name)
+    SUPPORTED_SHELLS.contains(&shell_name)
 }
 
 /// Configure the shell command for OSC 133 marker injection.
@@ -407,7 +407,11 @@ if (Get-Module PSReadLine -ErrorAction SilentlyContinue) {
     // -NoExit: keep the shell open after init script runs.
     // -Command ". '<path>'": dot-source bypasses execution policy.
     let safe_path = path.to_string_lossy().replace('\'', "''");
-    cmd.args(["-NoProfile", "-NoExit", "-Command", &format!(". '{safe_path}'")]);
+    cmd.args([
+        "-NoProfile",
+        "-NoExit",
+        "-Command",
+        &format!(". '{safe_path}'"),
+    ]);
     Ok(Some(path))
 }
-

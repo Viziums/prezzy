@@ -62,12 +62,8 @@ pub fn run(
     session_id: &str,
     exclude_patterns: &[String],
 ) -> Result<Option<i32>> {
-    let reader = master
-        .try_clone_reader()
-        .context("clone PTY reader")?;
-    let writer = master
-        .take_writer()
-        .context("take PTY writer")?;
+    let reader = master.try_clone_reader().context("clone PTY reader")?;
+    let writer = master.take_writer().context("take PTY writer")?;
 
     // Input thread: stdin → PTY master (detached — will die with process).
     let _input = std::thread::Builder::new()
@@ -81,7 +77,16 @@ pub fn run(
     if passthrough {
         passthrough_loop(reader, master)
     } else {
-        output_loop(reader, master, theme, level_filter, ascii, history, session_id, exclude_patterns)
+        output_loop(
+            reader,
+            master,
+            theme,
+            level_filter,
+            ascii,
+            history,
+            session_id,
+            exclude_patterns,
+        )
     }
 }
 
@@ -144,7 +149,7 @@ fn output_loop(
 
     loop {
         let n = match reader.read(&mut buf) {
-            Ok(0) => break,                  // EOF — child exited
+            Ok(0) => break, // EOF — child exited
             Ok(n) => n,
             Err(e) if is_eof_like(&e) => break,
             Err(e) => return Err(e.into()),
@@ -365,9 +370,7 @@ fn passthrough_loop(
 fn is_eof_like(e: &io::Error) -> bool {
     matches!(
         e.kind(),
-        io::ErrorKind::BrokenPipe
-            | io::ErrorKind::ConnectionReset
-            | io::ErrorKind::UnexpectedEof
+        io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset | io::ErrorKind::UnexpectedEof
     )
 }
 
@@ -404,8 +407,15 @@ mod tests {
             }
             let is_cmd = state.command_state == CommandState::CommandRunning;
 
-            process_chunk(chunk, &mut state, &mut beautifier, &mut out, was_cmd, is_cmd)
-                .unwrap();
+            process_chunk(
+                chunk,
+                &mut state,
+                &mut beautifier,
+                &mut out,
+                was_cmd,
+                is_cmd,
+            )
+            .unwrap();
         }
 
         if beautifier.is_active() {
@@ -420,10 +430,10 @@ mod tests {
     #[test]
     fn plain_command_output_passed_through() {
         let (out, code) = simulate(&[
-            b"\x1b]133;A\x07$ ",          // prompt
-            b"\x1b]133;C\x07",            // command start
-            b"hello world\n",             // output
-            b"\x1b]133;D;0\x07",          // command end, exit 0
+            b"\x1b]133;A\x07$ ", // prompt
+            b"\x1b]133;C\x07",   // command start
+            b"hello world\n",    // output
+            b"\x1b]133;D;0\x07", // command end, exit 0
         ]);
         let text = String::from_utf8_lossy(&out);
         assert!(text.contains("hello world"));
@@ -432,9 +442,7 @@ mod tests {
 
     #[test]
     fn prompt_text_passed_through_raw() {
-        let (out, _) = simulate(&[
-            b"\x1b]133;A\x07$ ",
-        ]);
+        let (out, _) = simulate(&[b"\x1b]133;A\x07$ "]);
         // Prompt is in (false, false) — raw passthrough.
         let text = String::from_utf8_lossy(&out);
         assert!(text.contains("$ "));
@@ -457,11 +465,7 @@ mod tests {
     #[test]
     fn empty_command_no_crash() {
         // User just pressed Enter — C immediately followed by D.
-        let (_, code) = simulate(&[
-            b"\x1b]133;A\x07$ ",
-            b"\x1b]133;C\x07",
-            b"\x1b]133;D;0\x07",
-        ]);
+        let (_, code) = simulate(&[b"\x1b]133;A\x07$ ", b"\x1b]133;C\x07", b"\x1b]133;D;0\x07"]);
         assert_eq!(code, Some(0));
     }
 
@@ -489,9 +493,9 @@ mod tests {
         let (out, _) = simulate(&[
             b"\x1b]133;C\x07",
             b"partial output\n",
-            b"\x1b[?1049h",               // enter alt screen
+            b"\x1b[?1049h", // enter alt screen
             b"vim content here",
-            b"\x1b[?1049l",               // leave alt screen
+            b"\x1b[?1049l", // leave alt screen
             b"\x1b]133;D;0\x07",
         ]);
         let text = String::from_utf8_lossy(&out);
@@ -502,11 +506,7 @@ mod tests {
     #[test]
     fn alt_screen_pure_passthrough() {
         // Enter alt screen outside a command (e.g. running `less` directly).
-        let (out, _) = simulate(&[
-            b"\x1b[?1049h",
-            b"fullscreen app content",
-            b"\x1b[?1049l",
-        ]);
+        let (out, _) = simulate(&[b"\x1b[?1049h", b"fullscreen app content", b"\x1b[?1049l"]);
         let text = String::from_utf8_lossy(&out);
         assert!(text.contains("fullscreen app content"));
     }
@@ -530,7 +530,15 @@ mod tests {
             vte_parser.advance(&mut state, byte);
         }
         let is_cmd = state.command_state == CommandState::CommandRunning;
-        process_chunk(start, &mut state, &mut beautifier, &mut out, was_cmd, is_cmd).unwrap();
+        process_chunk(
+            start,
+            &mut state,
+            &mut beautifier,
+            &mut out,
+            was_cmd,
+            is_cmd,
+        )
+        .unwrap();
 
         // Feed large chunks until overflow.
         for _ in 0..3 {
@@ -554,11 +562,7 @@ mod tests {
     #[test]
     fn no_markers_pure_passthrough() {
         // Simulate output from an unsupported shell — no OSC 133 markers.
-        let (out, code) = simulate(&[
-            b"$ ls\n",
-            b"file1.txt  file2.txt\n",
-            b"$ ",
-        ]);
+        let (out, code) = simulate(&[b"$ ls\n", b"file1.txt  file2.txt\n", b"$ "]);
         let text = String::from_utf8_lossy(&out);
         assert!(text.contains("file1.txt"));
         assert!(text.contains("file2.txt"));
@@ -572,8 +576,8 @@ mod tests {
         let (_, code) = simulate(&[
             b"\x1b]133;C\x07",
             b"output\n",
-            b"\x1b]133;D;",     // D marker split...
-            b"0\x07",           // ...across two chunks
+            b"\x1b]133;D;", // D marker split...
+            b"0\x07",       // ...across two chunks
         ]);
         assert_eq!(code, Some(0));
     }

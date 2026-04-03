@@ -1,4 +1,4 @@
-//! SQLite storage for command history.
+//! `SQLite` storage for command history.
 //!
 //! Schema is versioned via `user_version` pragma. Migrations run automatically
 //! on open, so adding columns later is straightforward.
@@ -37,18 +37,16 @@ impl HistoryDb {
     /// Open (or create) the history database at the given path.
     pub fn open(path: &Path) -> Result<Self> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .context("create history database directory")?;
+            std::fs::create_dir_all(parent).context("create history database directory")?;
         }
 
-        let conn = Connection::open(path)
-            .context("open history database")?;
+        let conn = Connection::open(path).context("open history database")?;
 
         // Performance: WAL mode for concurrent reads, reduced fsync.
         conn.pragma_update(None, "journal_mode", "WAL")?;
         conn.pragma_update(None, "synchronous", "NORMAL")?;
 
-        let mut db = Self { conn };
+        let db = Self { conn };
         db.migrate()?;
         Ok(db)
     }
@@ -57,7 +55,7 @@ impl HistoryDb {
     #[cfg(test)]
     pub fn open_in_memory() -> Result<Self> {
         let conn = Connection::open_in_memory()?;
-        let mut db = Self { conn };
+        let db = Self { conn };
         db.migrate()?;
         Ok(db)
     }
@@ -87,7 +85,7 @@ impl HistoryDb {
             "SELECT command, timestamp_ms, duration_ms, exit_code, cwd, format, session_id, hostname
              FROM commands ORDER BY timestamp_ms DESC LIMIT ?1",
         )?;
-        self.collect_rows(&mut stmt, params![limit])
+        Self::collect_rows(&mut stmt, params![limit])
     }
 
     /// Commands that exited with a non-zero code, newest first.
@@ -97,7 +95,7 @@ impl HistoryDb {
              FROM commands WHERE exit_code IS NOT NULL AND exit_code != 0
              ORDER BY timestamp_ms DESC LIMIT ?1",
         )?;
-        self.collect_rows(&mut stmt, params![limit])
+        Self::collect_rows(&mut stmt, params![limit])
     }
 
     /// Most frequently used commands.
@@ -120,7 +118,7 @@ impl HistoryDb {
              FROM commands WHERE command LIKE ?1
              ORDER BY timestamp_ms DESC LIMIT ?2",
         )?;
-        self.collect_rows(&mut stmt, params![like, limit])
+        Self::collect_rows(&mut stmt, params![like, limit])
     }
 
     /// Commands since a given timestamp (epoch ms), newest first.
@@ -130,7 +128,7 @@ impl HistoryDb {
              FROM commands WHERE timestamp_ms >= ?1
              ORDER BY timestamp_ms DESC LIMIT ?2",
         )?;
-        self.collect_rows(&mut stmt, params![since_ms, limit])
+        Self::collect_rows(&mut stmt, params![since_ms, limit])
     }
 
     /// Commands run in a specific directory (prefix match), newest first.
@@ -146,7 +144,7 @@ impl HistoryDb {
              FROM commands WHERE cwd LIKE ?1 OR cwd LIKE ?2
              ORDER BY timestamp_ms DESC LIMIT ?3",
         )?;
-        self.collect_rows(&mut stmt, params![like1, like2, limit])
+        Self::collect_rows(&mut stmt, params![like1, like2, limit])
     }
 
     /// Slowest commands.
@@ -156,25 +154,29 @@ impl HistoryDb {
              FROM commands WHERE duration_ms IS NOT NULL
              ORDER BY duration_ms DESC LIMIT ?1",
         )?;
-        self.collect_rows(&mut stmt, params![limit])
+        Self::collect_rows(&mut stmt, params![limit])
     }
 
     /// Aggregate statistics.
     pub fn stats(&self) -> Result<HistoryStats> {
-        let total: i64 = self.conn.query_row(
-            "SELECT COUNT(*) FROM commands", [], |r| r.get(0),
-        )?;
+        let total: i64 = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM commands", [], |r| r.get(0))?;
         let failed: i64 = self.conn.query_row(
             "SELECT COUNT(*) FROM commands WHERE exit_code IS NOT NULL AND exit_code != 0",
-            [], |r| r.get(0),
+            [],
+            |r| r.get(0),
         )?;
         let avg_duration: Option<f64> = self.conn.query_row(
             "SELECT AVG(duration_ms) FROM commands WHERE duration_ms IS NOT NULL",
-            [], |r| r.get(0),
+            [],
+            |r| r.get(0),
         )?;
-        let unique_commands: i64 = self.conn.query_row(
-            "SELECT COUNT(DISTINCT command) FROM commands", [], |r| r.get(0),
-        )?;
+        let unique_commands: i64 =
+            self.conn
+                .query_row("SELECT COUNT(DISTINCT command) FROM commands", [], |r| {
+                    r.get(0)
+                })?;
 
         Ok(HistoryStats {
             total_commands: total,
@@ -193,13 +195,17 @@ impl HistoryDb {
 
     /// Total number of recorded commands.
     pub fn count(&self) -> Result<i64> {
-        Ok(self.conn.query_row("SELECT COUNT(*) FROM commands", [], |r| r.get(0))?)
+        Ok(self
+            .conn
+            .query_row("SELECT COUNT(*) FROM commands", [], |r| r.get(0))?)
     }
 
     // -- internals ------------------------------------------------------------
 
-    fn migrate(&mut self) -> Result<()> {
-        let version: u32 = self.conn.pragma_query_value(None, "user_version", |r| r.get(0))?;
+    fn migrate(&self) -> Result<()> {
+        let version: u32 = self
+            .conn
+            .pragma_query_value(None, "user_version", |r| r.get(0))?;
 
         if version < 1 {
             self.conn.execute_batch(
@@ -222,14 +228,14 @@ impl HistoryDb {
 
         // Always update to current version.
         if version < SCHEMA_VERSION {
-            self.conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+            self.conn
+                .pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
 
         Ok(())
     }
 
     fn collect_rows(
-        &self,
         stmt: &mut rusqlite::Statement<'_>,
         params: impl rusqlite::Params,
     ) -> Result<Vec<CommandRecord>> {
@@ -260,6 +266,7 @@ pub struct HistoryStats {
 
 /// Default database path: `~/.local/share/prezzy/history.db` (Unix)
 /// or `%APPDATA%/prezzy/history.db` (Windows).
+#[must_use]
 pub fn default_db_path() -> Option<PathBuf> {
     dirs::data_dir().map(|d| d.join("prezzy").join("history.db"))
 }
@@ -288,15 +295,15 @@ fn alternate_path_form(path: &str) -> String {
 }
 
 /// Current Unix epoch in milliseconds.
+#[must_use]
 pub fn now_ms() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| {
-            i64::try_from(d.as_millis()).unwrap_or(i64::MAX)
-        })
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 /// Best-effort hostname.
+#[must_use]
 pub fn hostname() -> String {
     std::env::var("HOSTNAME")
         .or_else(|_| std::env::var("COMPUTERNAME"))

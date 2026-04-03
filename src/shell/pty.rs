@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
-use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
+use portable_pty::{Child, CommandBuilder, MasterPty, PtySize, native_pty_system};
 
 /// Detect the user's preferred shell from the environment.
 pub fn detect_shell() -> String {
@@ -70,7 +70,9 @@ pub fn spawn_shell(
         pixel_width: 0,
         pixel_height: 0,
     };
-    let pair = pty_system.openpty(size).context("failed to open PTY pair")?;
+    let pair = pty_system
+        .openpty(size)
+        .context("failed to open PTY pair")?;
 
     let mut cmd = CommandBuilder::new(shell_path);
 
